@@ -1,17 +1,17 @@
-/* 暮迟市地图 v2.3.1 · desktop viewport isolation hotfix */
+/* 暮迟市地图 v2.3.2 · desktop floating terminal */
 :root{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
 body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-root,.mm-root *{box-sizing:border-box}
 .mm-root{
-  --detail-w:360px;--head-h:64px;--desktop-w:min(1420px,calc(100vw - 40px));--desktop-h:min(780px,calc(100vh - 40px));
-  position:fixed!important;inset:0!important;z-index:2147483646!important;
-  display:none;align-items:center;justify-content:center;
-  padding:20px;
+  --detail-w:360px;--head-h:64px;
+  position:absolute!important;inset:0!important;z-index:1!important;
+  display:none;align-items:stretch;justify-content:stretch;
+  padding:0;
   color:#e9eeee;
-  background:rgba(2,5,6,.78);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
+  background:transparent;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
   line-height:normal!important;text-align:left!important;
   pointer-events:auto!important;
 }
@@ -19,15 +19,14 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-root button{font-family:inherit}
 .mm-shell{
   position:relative;
-  width:var(--desktop-w);
-  height:var(--desktop-h);
-  max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);
+  width:100%;height:100%;
+  max-width:none;max-height:none;
   display:flex;flex-direction:column;
   overflow:hidden;
-  border:1px solid rgba(196,211,212,.16);
+  border:1px solid rgba(196,211,212,.18);
   border-radius:22px;
-  background:#070b0d;
-  box-shadow:0 28px 90px rgba(0,0,0,.58),inset 0 1px 0 rgba(255,255,255,.025);
+  background:linear-gradient(180deg,rgba(11,17,20,.985),rgba(6,10,12,.99));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
 }
 .mm-head{
   height:var(--head-h);flex:0 0 var(--head-h);
@@ -49,7 +48,7 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-controls .mm-zoom-label{min-width:58px;font-size:9px;color:#829396;font-variant-numeric:tabular-nums}
 .mm-controls .mm-text-btn{display:flex;align-items:center;gap:5px;font-size:9px;letter-spacing:.06em}.mm-controls .mm-text-btn i{font-style:normal;font-size:13px;color:#99c7c8}
 .mm-controls .mm-close{margin-left:4px;font-size:19px;color:#c79ba7}
-.mm-content{display:grid;grid-template-columns:minmax(0,1fr) var(--detail-w);align-items:stretch;flex:1 1 auto;height:0;min-height:0;overflow:hidden;background:#050809}
+.mm-content{display:grid;grid-template-columns:minmax(0,1fr) var(--detail-w);align-items:stretch;flex:1 1 auto;height:0;min-height:0;overflow:hidden;background:#080d0f}
 /* Desktop map viewport is a fixed grid cell. Do not put aspect-ratio on this grid item: detail content can otherwise stretch the row and force the map cell to overflow into the detail rail. */
 .mm-map-area{position:relative;z-index:1;min-width:0;min-height:0;width:100%;height:100%;background:#030506;overflow:hidden;isolation:isolate}
 .mm-hint{position:absolute;left:12px;top:10px;z-index:7;padding:6px 9px;border:1px solid rgba(206,221,221,.12);border-radius:9px;background:rgba(7,10,11,.80);color:#819194;font-size:8px;letter-spacing:.06em;pointer-events:none;backdrop-filter:blur(5px)}
@@ -66,7 +65,7 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-hotspot.selected::before{border-color:#a8dcdd;box-shadow:0 0 0 3px rgba(130,198,201,.10),0 0 17px rgba(128,202,205,.26)}
 .mm-hotspot.selected::after{border-color:rgba(216,245,245,.13)}
 .mm-hotspot.current::after{border-color:rgba(223,155,176,.82);box-shadow:0 0 0 4px rgba(205,114,142,.09),0 0 16px rgba(210,117,145,.22)}
-.mm-detail{position:relative;z-index:2;min-width:0;min-height:0;width:100%;height:100%;overflow:auto;overscroll-behavior:contain;border-left:1px solid rgba(196,211,212,.11);background:linear-gradient(180deg,#0e1416,#090d0f);scrollbar-width:thin;scrollbar-color:#29373a transparent}
+.mm-detail{position:relative;z-index:2;min-width:0;min-height:0;width:100%;height:100%;overflow:auto;overscroll-behavior:contain;border-left:1px solid rgba(196,211,212,.11);background:linear-gradient(180deg,rgba(17,25,28,.985),rgba(9,14,16,.99));scrollbar-width:thin;scrollbar-color:#29373a transparent}
 .mm-detail-empty{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px;text-align:center}
 .mm-detail-empty i{display:flex;width:58px;height:58px;align-items:center;justify-content:center;border:1px solid rgba(153,194,197,.18);border-radius:50%;font:500 12px Georgia,serif;color:#789093}
 .mm-detail-empty b{margin-top:14px;font-family:"Noto Serif SC","Songti SC",serif;font-size:14px;letter-spacing:.12em}
@@ -105,7 +104,7 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 /* Tablet / phone: map and detail become one natural vertical document. */
 @media(max-width:900px){
   html,body{height:100%;overflow:hidden!important;background:#050809!important}
-  .mm-root{display:none;align-items:stretch;justify-content:flex-start;padding:0;background:#050809;backdrop-filter:none;-webkit-backdrop-filter:none;overflow-y:auto!important;overflow-x:hidden!important}
+  .mm-root{position:fixed!important;display:none;align-items:stretch;justify-content:flex-start;padding:0;background:#050809;backdrop-filter:none;-webkit-backdrop-filter:none;overflow-y:auto!important;overflow-x:hidden!important}
   .mm-root.open{display:block!important}
   .mm-shell{position:relative;width:100%!important;max-width:none!important;min-height:100%;height:auto!important;max-height:none!important;border:0;border-radius:0;box-shadow:none;overflow:visible;background:#050809}
   .mm-head{position:sticky;top:0;z-index:30;height:58px;flex-basis:58px;gap:9px;padding:8px 10px 8px 13px;border-bottom-color:rgba(196,211,212,.12);background:rgba(9,14,16,.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}

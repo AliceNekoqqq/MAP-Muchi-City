@@ -1,6 +1,6 @@
-/* 暮迟市地图 v2.3.1
+/* 暮迟市地图 v2.3.2
  * 01-11 是唯一交互对象。
- * v2.3.1: 修复桌面端 grid + aspect-ratio 导致地图越界覆盖详情；桌面地图视口独立定高，缩放不再影响详情栏；增强 MVU 变量读取。
+ * v2.3.2: PC 改为真正的悬浮终端 iframe，不再用全屏黑色遮罩；手机端保持 v2.3.1 纵向全屏布局。
  * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
  */
 function resolveTavernDocument(){
@@ -24,9 +24,9 @@ const MM_BASES=[
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const FRAME_ID='muchi-map-frame-v231';
-const ROOT_ID='muchi-map-v231';
-const OLD_IDS=['muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
+const FRAME_ID='muchi-map-frame-v232';
+const ROOT_ID='muchi-map-v232';
+const OLD_IDS=['muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -40,6 +40,7 @@ let maxZoom=2.6;
 let drag=null;
 let bound=false;
 let opening=null;
+let hostResizeHandler=null;
 
 function enc(path){return path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/')}
 function asset(path,base=0){return MM_BASES[Math.min(base,MM_BASES.length-1)]+enc(path)}
@@ -47,7 +48,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.3.1`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.3.2`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -72,11 +73,12 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.3.1]',text);
+  console.error('[暮迟地图 v2.3.2]',text);
 }
 
 function cleanupStale(){
   drag=null;
+  if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{} hostResizeHandler=null;}
   try{MM_DOC.getElementById(FRAME_ID)?.remove()}catch{}
   for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
   try{MM_DOC.querySelectorAll('[id^="muchi-map-host-v"],[id^="muchi-map-frame-v"]').forEach(el=>{if(el.id!==FRAME_ID)el.remove()})}catch{}
@@ -124,6 +126,43 @@ function shellHtml(){return `<section id="${ROOT_ID}" class="mm-root open" role=
   </div>
 </section>`}
 
+function hostViewport(){
+  const de=MM_DOC.documentElement,body=MM_DOC.body;
+  const w=Math.max(320,Number(MM_HOST?.innerWidth)||de?.clientWidth||body?.clientWidth||1280);
+  const h=Math.max(480,Number(MM_HOST?.innerHeight)||de?.clientHeight||body?.clientHeight||800);
+  return {w,h};
+}
+function desktopFrameSize(){
+  const {w:vw,h:vh}=hostViewport();
+  const head=vh<700?56:64;
+  const maxW=Math.min(1380,Math.max(960,vw-80));
+  const maxH=Math.min(780,Math.max(600,vh-80));
+  let detail=clamp(Math.round(vw*.245),330,380);
+  if(maxW<1120)detail=clamp(Math.round(maxW*.28),300,330);
+  let contentH=Math.max(500,maxH-head);
+  let mapW=contentH*1.5;
+  let totalW=mapW+detail;
+  if(totalW>maxW){
+    totalW=maxW;
+    mapW=Math.max(600,totalW-detail);
+    contentH=mapW/1.5;
+  }
+  let totalH=contentH+head;
+  if(totalH>maxH){
+    totalH=maxH;contentH=totalH-head;mapW=contentH*1.5;totalW=Math.min(maxW,mapW+detail);
+  }
+  return {width:Math.round(totalW),height:Math.round(totalH)};
+}
+function applyFrameLayout(frame){
+  if(!frame)return;
+  const {w}=hostViewport();
+  if(w<=900){
+    frame.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;border:0!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;';
+    return;
+  }
+  const size=desktopFrameSize();
+  frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${size.width}px!important;height:${size.height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:22px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 26px 90px rgba(0,0,0,.42)!important;`;
+}
 function mount(){
   cleanupStale();
   if(!cssText)throw Error('地图样式尚未准备完成');
@@ -131,7 +170,7 @@ function mount(){
   frame.id=FRAME_ID;
   frame.setAttribute('frameborder','0');
   frame.setAttribute('title','暮迟市地图');
-  frame.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;border:0!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;';
+  applyFrameLayout(frame);
   (MM_DOC.body||MM_DOC.documentElement).appendChild(frame);
   const doc=frame.contentDocument;
   if(!doc)throw Error('地图 iframe 无法访问');
@@ -142,6 +181,12 @@ function mount(){
   if(!root)throw Error('地图界面创建失败');
   bindRoot(root);
   doc.addEventListener('keydown',e=>{if(e.key==='Escape')closeMap()});
+  hostResizeHandler=()=>{
+    const live=getFrame();if(live!==frame)return;
+    applyFrameLayout(frame);
+    setTimeout(()=>{const r=getRoot();if(r){layoutDesktop(r);fit(r)}},30);
+  };
+  try{MM_HOST.addEventListener?.('resize',hostResizeHandler,{passive:true})}catch{}
   return root;
 }
 
@@ -212,23 +257,12 @@ function layoutDesktop(root){
   const win=root?.ownerDocument?.defaultView;if(!win)return;
   const vw=Math.max(320,win.innerWidth||0),vh=Math.max(480,win.innerHeight||0);
   if(vw<=900){
-    root.style.removeProperty('--desktop-w');root.style.removeProperty('--desktop-h');root.style.removeProperty('--detail-w');root.style.removeProperty('--head-h');
+    root.style.removeProperty('--detail-w');root.style.removeProperty('--head-h');
     return;
   }
-  const compact=vh<700;
-  const pad=compact?10:18;
-  const head=compact?56:64;
-  let detail=clamp(Math.round(vw*.27),320,400);
-  const maxW=Math.min(1540,vw-pad*2);
-  const maxH=Math.min(840,vh-pad*2);
-  if(maxW<1080)detail=clamp(Math.round(maxW*.30),300,330);
-  let contentH=Math.max(360,maxH-head);
-  let shellW=contentH*1.5+detail;
-  if(shellW>maxW){shellW=maxW;contentH=Math.max(360,(shellW-detail)/1.5)}
-  let shellH=Math.min(maxH,contentH+head);
-  if(shellH>maxH){shellH=maxH;contentH=shellH-head;shellW=Math.min(maxW,contentH*1.5+detail)}
-  root.style.setProperty('--desktop-w',`${Math.round(shellW)}px`);
-  root.style.setProperty('--desktop-h',`${Math.round(shellH)}px`);
+  const head=vh<650?56:64;
+  let detail=clamp(Math.round(vw*.27),300,380);
+  if(vw<1120)detail=clamp(Math.round(vw*.29),290,330);
   root.style.setProperty('--detail-w',`${Math.round(detail)}px`);
   root.style.setProperty('--head-h',`${head}px`);
 }
@@ -345,14 +379,14 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.3.1'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.3.2'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
 }
 function bindDocument(){
   try{
-    const key='__muchiMapBridgeV231';
+    const key='__muchiMapBridgeV232';
     if(MM_DOC[key])return;MM_DOC[key]=true;
     MM_DOC.addEventListener('click',e=>{
       const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
@@ -368,4 +402,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.3.1';
+export const VERSION='2.3.2';
