@@ -1,11 +1,24 @@
+function resolveHostWindow(){
+  let w=window,best=window;
+  for(let i=0;i<8;i++){
+    try{
+      if(w?.document?.body)best=w;
+      if(!w.parent||w.parent===w)break;
+      void w.parent.document;
+      w=w.parent;
+    }catch(_){break}
+  }
+  return best;
+}
+const MM_MODULE_BASE = new URL('../', import.meta.url).href;
 const MM_BASES = [
-  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.2/',
-  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.2/'
+  MM_MODULE_BASE,
+  MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ];
-const MM_STYLE_ID = 'muchi-map-style-v102';
-const MM_CRITICAL_STYLE_ID = 'muchi-map-critical-v102';
+const MM_STYLE_ID = 'muchi-map-style-v103';
+const MM_CRITICAL_STYLE_ID = 'muchi-map-critical-v103';
 const MM_ROOT_ID = 'muchi-map-overlay';
-const MM_HOST = (()=>{try{return window.parent&&window.parent.document?window.parent:(window.top?.document?window.top:window)}catch(_){return window}})();
+const MM_HOST = resolveHostWindow();
 const MM_DOC = MM_HOST.document;
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -16,7 +29,7 @@ let pointers=new Map(), dragStart=null, pinchStart=null;
 function installCriticalStyle(){
   if(MM_DOC.getElementById(MM_CRITICAL_STYLE_ID))return;
   const style=MM_DOC.createElement('style');style.id=MM_CRITICAL_STYLE_ID;
-  style.textContent=`#${MM_ROOT_ID}{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1000000;display:none;background:rgba(5,8,10,.92);color:#edf3f2;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}#${MM_ROOT_ID}.mm-open{display:block}#${MM_ROOT_ID} *{box-sizing:border-box}#${MM_ROOT_ID} .mm-shell{position:absolute;top:8px;right:8px;bottom:8px;left:8px;overflow:hidden;border:1px solid rgba(194,216,219,.22);border-radius:18px;background:#0b1012}#${MM_ROOT_ID} .mm-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid rgba(188,209,212,.16)}#${MM_ROOT_ID} .mm-title{flex:1}#${MM_ROOT_ID} .mm-title b{display:block;font-size:17px}#${MM_ROOT_ID} .mm-title span,#${MM_ROOT_ID} .mm-current{font-size:9px;color:#91a0a3}#${MM_ROOT_ID} .mm-head-actions{margin-left:auto;display:flex;gap:6px}#${MM_ROOT_ID} button{min-height:36px;border:1px solid rgba(188,209,212,.18);border-radius:9px;background:#12191c;color:#dce7e7}#${MM_ROOT_ID} .mm-body{position:absolute;top:61px;right:0;bottom:0;left:0;display:grid;grid-template-columns:minmax(0,1fr) 320px}#${MM_ROOT_ID} .mm-main{position:relative;min-width:0;min-height:0}#${MM_ROOT_ID} .mm-side{overflow:auto;border-left:1px solid rgba(188,209,212,.16);background:#101619}#${MM_ROOT_ID} .mm-side-empty{display:flex;min-height:100%;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:11px;line-height:1.8;color:#91a0a3}@media(max-width:900px){#${MM_ROOT_ID} .mm-shell{top:0;right:0;bottom:0;left:0;border:0;border-radius:0}#${MM_ROOT_ID} .mm-current{display:none}#${MM_ROOT_ID} .mm-body{grid-template-columns:1fr}#${MM_ROOT_ID} .mm-side{position:absolute;left:8px;right:8px;bottom:8px;max-height:42%;border:1px solid rgba(188,209,212,.16);border-radius:14px}}`;
+  style.textContent=`#${MM_ROOT_ID}{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147482600;display:none;background:rgba(5,8,10,.92);color:#edf3f2;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}#${MM_ROOT_ID}.mm-open{display:block}#${MM_ROOT_ID} *{box-sizing:border-box}#${MM_ROOT_ID} .mm-shell{position:absolute;top:8px;right:8px;bottom:8px;left:8px;overflow:hidden;border:1px solid rgba(194,216,219,.22);border-radius:18px;background:#0b1012}#${MM_ROOT_ID} .mm-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid rgba(188,209,212,.16)}#${MM_ROOT_ID} .mm-title{flex:1}#${MM_ROOT_ID} .mm-title b{display:block;font-size:17px}#${MM_ROOT_ID} .mm-title span,#${MM_ROOT_ID} .mm-current{font-size:9px;color:#91a0a3}#${MM_ROOT_ID} .mm-head-actions{margin-left:auto;display:flex;gap:6px}#${MM_ROOT_ID} button{min-height:36px;border:1px solid rgba(188,209,212,.18);border-radius:9px;background:#12191c;color:#dce7e7}#${MM_ROOT_ID} .mm-body{position:absolute;top:61px;right:0;bottom:0;left:0;display:grid;grid-template-columns:minmax(0,1fr) 320px}#${MM_ROOT_ID} .mm-main{position:relative;min-width:0;min-height:0}#${MM_ROOT_ID} .mm-side{overflow:auto;border-left:1px solid rgba(188,209,212,.16);background:#101619}#${MM_ROOT_ID} .mm-side-empty{display:flex;min-height:100%;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:11px;line-height:1.8;color:#91a0a3}@media(max-width:900px){#${MM_ROOT_ID} .mm-shell{top:0;right:0;bottom:0;left:0;border:0;border-radius:0}#${MM_ROOT_ID} .mm-current{display:none}#${MM_ROOT_ID} .mm-body{grid-template-columns:1fr}#${MM_ROOT_ID} .mm-side{position:absolute;left:8px;right:8px;bottom:8px;max-height:42%;border:1px solid rgba(188,209,212,.16);border-radius:14px}}`;
   MM_DOC.head.appendChild(style);
 }
 
@@ -33,7 +46,7 @@ async function loadStyle(force=false){
     const css=await textNoCache('Maps/style.css');
     if(!style){style=MM_DOC.createElement('style');style.id=MM_STYLE_ID;MM_DOC.head.appendChild(style)}
     style.textContent=css;
-  }catch(e){console.error('[暮迟地图] CSS加载失败',e)}
+  }catch(e){console.error('[暮迟地图] CSS加载失败',e);throw e}
 }
 async function loadData(){
   try{mmData=await jsonNoCache('Maps/map-data.json')}catch(e){console.error('[暮迟地图] 数据加载失败',e);throw e}
@@ -147,12 +160,19 @@ async function openMap(){
 }
 function closeMap(){const root=MM_DOC.getElementById(MM_ROOT_ID);if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true')}}
 let mmBound=false;
-function installTriggers(){
-  MM_HOST.MuchiMap={open:openMap,close:closeMap,refresh:refreshResources};
-  if(mmBound)return;mmBound=true;
-  try{eventOn(getButtonEvent('暮迟地图'),()=>openMap())}catch(e){mmBound=false;console.error('[暮迟地图] 按钮绑定失败',e);try{toastr?.error?.(`暮迟地图按钮绑定失败：${e?.message||e}`)}catch{}}
-  try{eventOn('muchi:open-map',()=>openMap())}catch(e){console.warn('[暮迟地图] 自定义事件绑定失败',e)}
+function publishApi(){
+  const api={open:openMap,close:closeMap,refresh:refreshResources};
+  try{MM_HOST.MuchiMap=api}catch{}
+  try{window.MuchiMap=api}catch{}
+  return api;
 }
-MM_HOST.MuchiMap={open:openMap,close:closeMap,refresh:refreshResources};
+function installTriggers(){
+  publishApi();
+  if(mmBound)return;mmBound=true;
+  try{if(typeof eventOn==='function'&&typeof getButtonEvent==='function')eventOn(getButtonEvent('暮迟地图'),openMap)}catch(e){console.error('[暮迟地图] 按钮绑定失败',e)}
+  try{if(typeof eventOn==='function')eventOn('muchi:open-map',openMap)}catch(e){console.warn('[暮迟地图] 自定义事件绑定失败',e)}
+  try{MM_DOC.addEventListener('click',e=>{const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;e.preventDefault();e.stopPropagation();openMap()},true)}catch(e){console.warn('[暮迟地图] 状态栏入口绑定失败',e)}
+}
+publishApi();
 try{if(typeof $==='function')$(()=>installTriggers());else setTimeout(installTriggers,0)}catch{setTimeout(installTriggers,0)}
 export {openMap,closeMap,refreshResources};
