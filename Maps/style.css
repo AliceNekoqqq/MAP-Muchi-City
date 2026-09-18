@@ -1,6 +1,7 @@
-:host{all:initial}
-.mm-root{position:fixed;inset:0;display:none;background:#050809;color:#e9eeee;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;z-index:1;pointer-events:auto}
-.mm-root.open{display:block}
+#muchi-map-v210{line-height:normal!important;text-align:left!important}
+#muchi-map-v210 button{font-family:inherit}
+.mm-root{position:fixed!important;inset:0!important;display:none;background:#050809;color:#e9eeee;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;z-index:2147483646!important;pointer-events:auto!important}
+.mm-root.open{display:block!important}
 .mm-root *{box-sizing:border-box}
 .mm-shell{position:absolute;inset:0;display:flex;flex-direction:column;background:#070b0d;overflow:hidden}
 .mm-head{height:66px;flex:0 0 66px;display:flex;align-items:center;gap:18px;padding:10px 14px 10px 18px;border-bottom:1px solid rgba(196,211,212,.13);background:linear-gradient(180deg,#101619,#0a0f11)}

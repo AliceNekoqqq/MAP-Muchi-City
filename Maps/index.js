@@ -1,6 +1,7 @@
-/* 暮迟市地图 v2.0.0
- * 设计原则：底图即地图；01-11 是唯一交互对象。
- * 不再区分“探索地点 / 城区分区”，不再叠加路线层。
+/* 暮迟市地图 v2.1.0
+ * 01-11 是唯一交互对象。
+ * v2.1.0: 移除 Shadow DOM / 隐形 pointer host；资源准备完成后才挂载 UI。
+ * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
  */
 function resolveHostWindow(){
   let w=window,best=window;
@@ -20,30 +21,34 @@ const MM_DOC=MM_HOST.document;
 const MM_MODULE_BASE=new URL('../',import.meta.url).href;
 const MM_BASES=[
   MM_MODULE_BASE,
+  MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','testingcf.jsdelivr.net'):MM_MODULE_BASE,
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
-];
-const HOST_ID='muchi-map-host-v200';
-const ROOT_ID='muchi-map-v200';
-const STYLE_ID='muchi-map-style-v200';
+].filter((v,i,a)=>a.indexOf(v)===i);
+
+const ROOT_ID='muchi-map-v210';
+const STYLE_ID='muchi-map-style-v210';
+const OLD_IDS=['muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
 let mapData=null;
+let cssText='';
 let statData={};
 let selectedId='';
 let zoom=1;
-let minZoom=.2;
+let minZoom=.18;
 let maxZoom=2.6;
 let drag=null;
 let bound=false;
+let opening=null;
 
 function enc(path){return path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/')}
-function asset(path,base=0){return MM_BASES[base]+enc(path)}
+function asset(path,base=0){return MM_BASES[Math.min(base,MM_BASES.length-1)]+enc(path)}
 async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.0.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.1.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -55,30 +60,43 @@ async function readStat(){
   try{const v=typeof getAllVariables==='function'?getAllVariables():{};return v?.stat_data||v||{}}
   catch(_){return {}}
 }
-
-function getHost(){return MM_DOC.getElementById(HOST_ID)}
-function getRoot(){return getHost()?.shadowRoot?.getElementById(ROOT_ID)||null}
-function ensureHost(){
-  let host=getHost();
-  if(host?.shadowRoot)return host;
-  try{host?.remove()}catch{}
-  host=MM_DOC.createElement('div');
-  host.id=HOST_ID;
-  host.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:2147483646!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:none!important;contain:none!important;isolation:isolate!important';
-  (MM_DOC.body||MM_DOC.documentElement).appendChild(host);
-  host.attachShadow({mode:'open'});
-  return host;
-}
-async function ensureStyle(){
-  const shadow=ensureHost().shadowRoot;
-  let style=shadow.getElementById(STYLE_ID);
-  if(style)return;
-  const css=await loadText('Maps/style.css');
-  style=MM_DOC.createElement('style');style.id=STYLE_ID;style.textContent=css;shadow.appendChild(style);
+function notifyError(message){
+  const text=`暮迟地图打开失败：${message}`;
+  try{MM_HOST.toastr?.error?.(text)}catch{}
+  console.error('[暮迟地图 v2.1.0]',text);
 }
 
-function shellHtml(){return `<div id="${ROOT_ID}" class="mm-root" aria-hidden="true">
-  <section class="mm-shell" role="dialog" aria-modal="true" aria-label="暮迟市地图">
+function cleanupStale(){
+  drag=null;
+  try{MM_DOC.getElementById(ROOT_ID)?.remove()}catch{}
+  for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
+  try{
+    MM_DOC.querySelectorAll('[id^="muchi-map-host-v"]').forEach(el=>el.remove());
+  }catch{}
+}
+function getRoot(){return MM_DOC.getElementById(ROOT_ID)}
+function ensureStyle(){
+  let style=MM_DOC.getElementById(STYLE_ID);
+  if(style)return style;
+  if(!cssText)throw Error('地图样式尚未准备完成');
+  style=MM_DOC.createElement('style');
+  style.id=STYLE_ID;
+  style.textContent=cssText;
+  (MM_DOC.head||MM_DOC.documentElement).appendChild(style);
+  return style;
+}
+async function prepareResources(){
+  if(mapData&&cssText)return;
+  const [css,data]=await Promise.all([
+    cssText?Promise.resolve(cssText):loadText('Maps/style.css'),
+    mapData?Promise.resolve(mapData):loadJson('Maps/map-data.json')
+  ]);
+  cssText=css;
+  mapData=data;
+}
+
+function shellHtml(){return `<section id="${ROOT_ID}" class="mm-root open" role="dialog" aria-modal="true" aria-label="暮迟市地图">
+  <div class="mm-shell">
     <header class="mm-head">
       <div class="mm-title"><b>暮迟市地图</b><span>MU CHI CITY · 01—11 区域索引</span></div>
       <div class="mm-location"><span>当前地点</span><b data-ui="current-name">读取中…</b></div>
@@ -101,17 +119,22 @@ function shellHtml(){return `<div id="${ROOT_ID}" class="mm-root" aria-hidden="t
         </div>
       </main>
       <aside class="mm-detail" data-ui="detail">
-        <div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上已有的编号圆点查看详情。城区名称只作为底图信息，不再作为第二套交互层。</span></div>
+        <div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>
       </aside>
     </div>
-  </section>
-</div>`}
+  </div>
+</section>`}
 
 function mount(){
-  const host=ensureHost(),shadow=host.shadowRoot;
-  let root=getRoot();if(root)return root;
-  root=MM_DOC.createElement('div');root.innerHTML=shellHtml();root=root.firstElementChild;shadow.appendChild(root);
-  bindRoot(root);return root;
+  cleanupStale();
+  ensureStyle();
+  const box=MM_DOC.createElement('div');
+  box.innerHTML=shellHtml();
+  const root=box.firstElementChild;
+  if(!root)throw Error('地图界面创建失败');
+  (MM_DOC.body||MM_DOC.documentElement).appendChild(root);
+  bindRoot(root);
+  return root;
 }
 
 function regionById(id){return mapData?.regions?.find(r=>r.id===String(id))||null}
@@ -136,11 +159,11 @@ function aggregateRegion(region){
 function riskClass(risk){return /极高|高/.test(risk)?'danger':/中/.test(risk)?'warn':'safe'}
 function metricHtml(label,value,cls=''){
   if(value==null)return `<div class="mm-metric"><span>${esc(label)}</span><b>暂无记录</b></div>`;
-  return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b></div>`
+  return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b></div>`;
 }
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
-  if(!region){box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上已有的编号圆点查看详情。</span></div>';return}
+  if(!region){box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';return}
   const ag=aggregateRegion(region),cur=currentRegion()?.id===region.id;
   const stateRows=ag.states.length?ag.states.map(x=>`<div class="mm-subrow"><span>${esc(x.name)}</span><b>${esc(x.state?.通行状态||'状态未知')}</b></div>`).join(''):'<div class="mm-none">该区域尚无动态记录</div>';
   const tags=ag.tags.length?`<div class="mm-tags">${ag.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
@@ -166,7 +189,7 @@ function renderHotspots(root){
   layer.innerHTML=(mapData?.regions||[]).map(r=>`<button type="button" class="mm-hotspot${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name)}"><span>${esc(r.id)}</span></button>`).join('');
 }
 function render(root){
-  root.querySelector('[data-ui="current-name"]').textContent=currentLocation();
+  const name=root.querySelector('[data-ui="current-name"]');if(name)name.textContent=currentLocation();
   renderHotspots(root);
   renderDetail(root,selectedId?regionById(selectedId):null);
   updateZoomLabel(root);
@@ -190,8 +213,9 @@ function computeFit(root){
 }
 function fit(root){
   const vp=viewport(root);if(!vp)return;
-  zoom=computeFit(root);minZoom=Math.min(.18,zoom*.65);maxZoom=Math.max(2.6,zoom*5);
-  applyZoom(root);requestAnimationFrame(()=>{vp.scrollLeft=Math.max(0,(vp.scrollWidth-vp.clientWidth)/2);vp.scrollTop=Math.max(0,(vp.scrollHeight-vp.clientHeight)/2)});
+  zoom=computeFit(root);minZoom=Math.max(.12,Math.min(zoom*.65,.28));maxZoom=Math.max(2.6,zoom*5);
+  applyZoom(root);
+  requestAnimationFrame(()=>{vp.scrollLeft=Math.max(0,(vp.scrollWidth-vp.clientWidth)/2);vp.scrollTop=Math.max(0,(vp.scrollHeight-vp.clientHeight)/2)});
 }
 function zoomAt(root,next,clientX=null,clientY=null){
   const vp=viewport(root);if(!vp)return;
@@ -227,6 +251,7 @@ function bindRoot(root){
     if(a==='locate'){const r=currentRegion();if(r){selectRegion(root,r.id,false);centerRegion(root,r,true)}return}
   });
   const vp=viewport(root);
+  if(!vp)throw Error('地图视口创建失败');
   vp.addEventListener('wheel',e=>{
     if(!(e.ctrlKey||e.metaKey))return;
     e.preventDefault();zoomAt(root,zoom*(e.deltaY<0?1.12:.89),e.clientX,e.clientY);
@@ -238,48 +263,71 @@ function bindRoot(root){
   });
   vp.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;vp.scrollLeft=drag.left-(e.clientX-drag.x);vp.scrollTop=drag.top-(e.clientY-drag.y)});
   const end=e=>{if(!drag||e.pointerId!==drag.id)return;drag=null;vp.classList.remove('dragging')};
-  vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);
-  root.addEventListener('click',e=>{if(e.target.closest?.('.mm-detail')&&e.target.matches?.('[data-detail-close]'))root.classList.remove('mm-has-detail')});
+  vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);vp.addEventListener('lostpointercapture',()=>{drag=null;vp.classList.remove('dragging')});
 }
-
-function setHostPointer(on){const h=ensureHost();h.style.setProperty('pointer-events',on?'auto':'none','important')}
-function showError(root,e){root.querySelector('[data-ui="detail"]').innerHTML=`<div class="mm-detail-empty mm-error"><i>!</i><b>地图加载失败</b><span>${esc(e?.message||String(e))}</span></div>`}
 
 export async function openMap(){
-  const root=mount();setHostPointer(true);root.classList.add('open');root.setAttribute('aria-hidden','false');
-  try{
-    await ensureStyle();
-    if(!mapData)mapData=await loadJson('Maps/map-data.json');
-    statData=await readStat();
-    const img=root.querySelector('[data-ui="map"]');
-    if(!img.dataset.ready){img.dataset.ready='1';img.src=asset(mapData.map.image);img.onerror=()=>{if(img.dataset.fallback)return;img.dataset.fallback='1';img.src=asset(mapData.map.image,1)}}
-    const cur=currentRegion();if(!selectedId&&cur)selectedId=cur.id;
-    render(root);
-    requestAnimationFrame(()=>{fit(root);if(cur)setTimeout(()=>centerRegion(root,cur,false),20)});
-  }catch(e){console.error('[暮迟地图 v2] 打开失败',e);showError(root,e)}
-  return root;
+  if(opening)return opening;
+  opening=(async()=>{
+    cleanupStale();
+    try{
+      /* 先准备所有会导致失败的远程资源，再创建任何全屏 DOM。 */
+      await prepareResources();
+      statData=await readStat();
+      const root=mount();
+      const img=root.querySelector('[data-ui="map"]');
+      if(!img)throw Error('地图图片容器创建失败');
+      img.src=asset(mapData.map.image);
+      img.onerror=()=>{
+        if(img.dataset.fallback)return;
+        img.dataset.fallback='1';
+        img.src=asset(mapData.map.image,1);
+      };
+      const cur=currentRegion();if(!selectedId&&cur)selectedId=cur.id;
+      render(root);
+      requestAnimationFrame(()=>{
+        const live=getRoot();if(live!==root)return;
+        fit(root);if(cur)setTimeout(()=>{if(getRoot()===root)centerRegion(root,cur,false)},30);
+      });
+      return root;
+    }catch(e){
+      cleanupStale();
+      notifyError(e?.message||String(e));
+      return null;
+    }finally{opening=null}
+  })();
+  return opening;
 }
-export function closeMap(){const root=getRoot();if(root){root.classList.remove('open','mm-has-detail');root.setAttribute('aria-hidden','true')}setHostPointer(false)}
-export async function refreshMap(){mapData=null;statData=await readStat();return openMap()}
+export function closeMap(){cleanupStale()}
+export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
-function accessibleWindows(){const out=[],seen=new Set();let w=window;for(let i=0;i<8;i++){try{if(!seen.has(w)){out.push(w);seen.add(w)}if(!w.parent||w.parent===w)break;void w.parent.document;w=w.parent}catch(_){break}}return out}
+function accessibleWindows(){
+  const out=[],seen=new Set();let w=window;
+  for(let i=0;i<8;i++){
+    try{if(!seen.has(w)){out.push(w);seen.add(w)}if(!w.parent||w.parent===w)break;void w.parent.document;w=w.parent}catch(_){break}
+  }
+  return out;
+}
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.0.0'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.1.0'};
   for(const w of accessibleWindows())try{w.MuchiMap=api}catch{}
   return api;
 }
 function bindDocument(doc){
   try{
-    if(doc.__muchiMapBridgeV200)return;doc.__muchiMapBridgeV200=true;
-    doc.addEventListener('click',e=>{const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;e.preventDefault();e.stopPropagation();openMap()},true);
+    if(doc.__muchiMapBridgeV210)return;doc.__muchiMapBridgeV210=true;
+    doc.addEventListener('click',e=>{
+      const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
+      e.preventDefault();e.stopPropagation();openMap();
+    },true);
   }catch(_){ }
 }
 function install(){
   installApi();for(const w of accessibleWindows())try{bindDocument(w.document)}catch{}
   if(bound)return;bound=true;
-  try{if(typeof eventOn==='function'&&typeof getButtonEvent==='function')eventOn(getButtonEvent('暮迟地图'),openMap)}catch(e){console.warn('[暮迟地图 v2] 按钮绑定失败',e)}
+  try{if(typeof eventOn==='function'&&typeof getButtonEvent==='function')eventOn(getButtonEvent('暮迟地图'),openMap)}catch(e){console.warn('[暮迟地图 v2.1.0] 按钮绑定失败',e)}
   try{if(typeof eventOn==='function')eventOn('muchi:open-map',openMap)}catch(_){ }
-  try{MM_DOC.addEventListener('keydown',e=>{if(e.key==='Escape'&&getRoot()?.classList.contains('open'))closeMap()})}catch(_){ }
+  try{MM_DOC.addEventListener('keydown',e=>{if(e.key==='Escape'&&getRoot())closeMap()})}catch(_){ }
 }
 install();setTimeout(install,700);
-export const VERSION='2.0.0';
+export const VERSION='2.1.0';
