@@ -64,3 +64,9 @@ await import(`${url}?v=${Date.now()}`);
 - GitHub 资源手动即时刷新
 
 > `临江大学城` 是暮迟市内的普通大学城区域，不等同于设定中的栖澜大学。栖澜大学仍位于暮迟市外。
+
+## v2 修复
+- 酒馆助手后台脚本优先挂载到 `window.parent` 的 SillyTavern 页面。
+- 资源读取改为 testingcf / fastly / cdn.jsdelivr 多源回退。
+- 地图打开时先显示壳层；资源失败会直接显示错误，而不是按钮无反应。
+- 对外暴露 `window.parent.MuchiMap.open()/close()/refresh()`。
