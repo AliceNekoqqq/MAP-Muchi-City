@@ -1,7 +1,11 @@
-const MM_REPO = 'https://raw.githubusercontent.com/AliceNekoqqq/MAP-Muchi-City/main/';
+const MM_BASES = [
+  'https://testingcf.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
+  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
+  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
+];
 const MM_STYLE_ID = 'muchi-map-style-v1';
 const MM_ROOT_ID = 'muchi-map-overlay';
-const MM_HOST = (()=>{try{return window.top?.document?window.top:window}catch(_){return window}})();
+const MM_HOST = (()=>{try{return window.parent&&window.parent.document?window.parent:(window.top?.document?window.top:window)}catch(_){return window}})();
 const MM_DOC = MM_HOST.document;
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -10,8 +14,9 @@ let view={scale:1,x:0,y:0,minScale:.2,maxScale:3.6,touched:false};
 let pointers=new Map(), dragStart=null, pinchStart=null;
 
 function cacheBust(url){return `${url}${url.includes('?')?'&':'?'}t=${Date.now()}`}
-function raw(path){return cacheBust(MM_REPO+path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/'))}
-async function textNoCache(path){const r=await fetch(raw(path),{cache:'no-store'});if(!r.ok)throw new Error(`${path}: ${r.status}`);return r.text()}
+function enc(path){return path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/')}
+function asset(path,base=0){return cacheBust(MM_BASES[base]+enc(path))}
+async function textNoCache(path){let last;for(let i=0;i<MM_BASES.length;i++){try{const r=await fetch(asset(path,i),{cache:'no-store'});if(!r.ok)throw new Error(`${path}: ${r.status}`);return await r.text()}catch(e){last=e;console.warn('[暮迟地图] 资源源失败',MM_BASES[i],e)}}throw last||new Error(`${path}: 加载失败`)}
 async function jsonNoCache(path){return JSON.parse(await textNoCache(path))}
 
 async function loadStyle(force=false){
@@ -91,7 +96,7 @@ function renderMarkers(root){
 }
 function renderDetail(root,name){
   const detail=root.querySelector('.mm-detail'),empty=root.querySelector('.mm-side-empty');const p=byName(name);if(!p){detail.classList.remove('active');empty.style.display='flex';return}
-  empty.style.display='none';detail.classList.add('active');const state=locState(p.name);const isLoc=!!mmData?.locations?.find(x=>x.name===p.name);const res=isLoc?(state.资源指数??'—'):'—',horde=isLoc?(state.尸群指数??'—'):'—',pass=isLoc?(state.通行状态||'未知'):'城区概览';const tags=Array.isArray(state.动态标签)?state.动态标签:[];const img=p.image?raw(p.image):'';
+  empty.style.display='none';detail.classList.add('active');const state=locState(p.name);const isLoc=!!mmData?.locations?.find(x=>x.name===p.name);const res=isLoc?(state.资源指数??'—'):'—',horde=isLoc?(state.尸群指数??'—'):'—',pass=isLoc?(state.通行状态||'未知'):'城区概览';const tags=Array.isArray(state.动态标签)?state.动态标签:[];const img=p.image?asset(p.image):'';
   const tagHtml=tags.length?tags.map(x=>`<span class="mm-tag hot">${esc(x)}</span>`).join(''):'<span class="mm-tag">无新增标签</span>';
   const neighbors=(p.neighbors||[]).map(x=>`<button type="button" data-neighbor="${esc(x)}">${esc(x)}</button>`).join('');
   detail.innerHTML=`<div class="mm-photo" style="background-image:url('${img}')"><span class="mm-photo-tag">${isLoc?'现场影像':'城区档案'}</span></div><div class="mm-info"><div class="mm-info-head"><div><h2>${esc(p.name)}</h2><p>${esc(p.district||'暮迟市城区分区')}</p></div><span class="mm-id">${esc(p.id)}</span></div>${isLoc?`<div class="mm-statgrid"><div class="mm-stat"><span>物资指数</span><b>${esc(res)}</b><div class="mm-bar"><i style="width:${pct(res)}%"></i></div></div><div class="mm-stat"><span>尸群密度</span><b>${esc(horde)}</b><div class="mm-bar danger"><i style="width:${pct(horde)}%"></i></div></div><div class="mm-stat"><span>基础风险</span><b>${esc(p.baseRisk||'未知')}</b></div><div class="mm-stat"><span>通行状态</span><b>${esc(pass)}</b></div></div><div class="mm-section resources"><label>物资倾向</label><p>${esc(p.resources||'未知')}</p></div><div class="mm-section intel"><label>已知情报</label><p>${esc(p.intel||'暂无')}</p></div><div class="mm-section"><label>动态标签</label><div class="mm-tags">${tagHtml}</div></div>${neighbors?`<div class="mm-section neighborsec"><label>相邻路线</label><div class="mm-neighbors">${neighbors}</div></div>`:''}<div class="mm-side-foot">坐标 ${Number(p.x).toFixed(2)} / ${Number(p.y).toFixed(2)} · ${esc(state.最后更新时间||'未记录更新时间')}</div>`:`<div class="mm-section intel"><label>城区说明</label><p>这是暮迟市的区域级坐标点，用于定位与宏观态势展示；具体探索仍以探索地点层为准。</p></div><div class="mm-side-foot">坐标 ${Number(p.x).toFixed(2)} / ${Number(p.y).toFixed(2)}</div>`}</div>`;
@@ -118,11 +123,28 @@ function bind(root){
   MM_HOST.addEventListener?.('resize',()=>{if(root.classList.contains('mm-open')&&!view.touched)fitView(root)});
 }
 
-async function refreshResources(){const root=mount();root.classList.add('mm-refreshing');try{await Promise.all([loadStyle(true),loadData()]);mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=raw(mmData.map.image);render(root);if(!view.touched)setTimeout(()=>fitView(root),30)}catch(e){console.error('[暮迟地图] 刷新失败',e)}finally{root.classList.remove('mm-refreshing')}}
-async function openMap(){await loadStyle();const root=mount();root.classList.add('mm-refreshing');try{await loadData();mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=raw(mmData.map.image);root.classList.add('mm-open');root.setAttribute('aria-hidden','false');render(root);const cur=currentName();if(!mmSelected&&byName(cur))mmSelected=cur;render(root);requestAnimationFrame(()=>{fitView(root);if(mmSelected)centerOn(root,mmSelected,Math.max(view.scale,view.scale*1.28))})}finally{root.classList.remove('mm-refreshing')}}
+function showLoadError(root,e){
+  try{
+    root.classList.add('mm-open');root.setAttribute('aria-hidden','false');
+    const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML=`<div><b>地图资源加载失败</b><br><span>${esc(e?.message||e||'未知错误')}</span><br><small>请确认 GitHub 仓库已上传 Map/index.js、Map/style.css、Map/map-data.json 与 Assets/暮迟市地图.png。</small></div>`}
+  }catch(_){}
+}
+async function refreshResources(){const root=mount();root.classList.add('mm-refreshing');try{await Promise.all([loadStyle(true),loadData()]);mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=asset(mmData.map.image);render(root);if(!view.touched)setTimeout(()=>fitView(root),30)}catch(e){console.error('[暮迟地图] 刷新失败',e)}finally{root.classList.remove('mm-refreshing')}}
+async function openMap(){
+  const root=mount();root.classList.add('mm-open','mm-refreshing');root.setAttribute('aria-hidden','false');
+  try{
+    await loadStyle();await loadData();mmStat=await getStat();
+    const img=root.querySelector('.mm-map-image');
+    img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=asset(mmData.map.image,1)}};
+    img.src=asset(mmData.map.image);render(root);
+    const cur=currentName();if(!mmSelected&&byName(cur))mmSelected=cur;render(root);
+    requestAnimationFrame(()=>{fitView(root);if(mmSelected)centerOn(root,mmSelected,Math.max(view.scale,view.scale*1.28))});
+  }catch(e){console.error('[暮迟地图] 打开失败',e);showLoadError(root,e)}finally{root.classList.remove('mm-refreshing')}
+}
 function closeMap(){const root=MM_DOC.getElementById(MM_ROOT_ID);if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true')}}
 function installTriggers(){
   MM_HOST.__muchiMapOpen=()=>openMap();
+  MM_HOST.MuchiMap={open:openMap,close:closeMap,refresh:refreshResources};
   if(!MM_HOST.__muchiMapScriptButtonBound){
     try{appendInexistentScriptButtons?.([{name:'暮迟地图',visible:true}]);eventOn?.(getButtonEvent?.('暮迟地图'),()=>MM_HOST.__muchiMapOpen?.());MM_HOST.__muchiMapScriptButtonBound=true}catch(e){console.warn('[暮迟地图] 酒馆助手按钮注册失败',e)}
   }

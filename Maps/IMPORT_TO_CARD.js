@@ -1,8 +1,10 @@
-// TavernHelper / 酒馆助手：将此段作为角色卡脚本即可。
-// 每次角色卡重新加载时使用时间戳请求 main 分支最新 index.js。
-const MUCHI_MAP_MODULE='https://testingcf.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/Map/index.js';
-try {
-  await import(`${MUCHI_MAP_MODULE}?v=${Date.now()}`);
-} catch (e) {
-  console.error('[暮迟地图] 远程脚本加载失败', e);
-}
+// 可选：单独作为 TavernHelper 脚本导入。
+// 正式角色卡 v20 已由“暮迟UI总控”按需加载本模块。
+const urls=[
+  'https://testingcf.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/Map/index.js',
+  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/Map/index.js',
+  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/Map/index.js',
+];
+let last;
+for(const u of urls){try{await import(`${u}?v=${Date.now()}`);last=null;break}catch(e){last=e}}
+if(last)throw last;
