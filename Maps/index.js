@@ -1,8 +1,8 @@
 const MM_BASES = [
-  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.0/',
-  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.0/'
+  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.1/',
+  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.1/'
 ];
-const MM_STYLE_ID = 'muchi-map-style-v1';
+const MM_STYLE_ID = 'muchi-map-style-v101';
 const MM_ROOT_ID = 'muchi-map-overlay';
 const MM_HOST = (()=>{try{return window.parent&&window.parent.document?window.parent:(window.top?.document?window.top:window)}catch(_){return window}})();
 const MM_DOC = MM_HOST.document;
@@ -22,13 +22,13 @@ async function loadStyle(force=false){
   let style=MM_DOC.getElementById(MM_STYLE_ID);
   if(style&&!force)return;
   try{
-    const css=await textNoCache('Map/style.css');
+    const css=await textNoCache('Maps/style.css');
     if(!style){style=MM_DOC.createElement('style');style.id=MM_STYLE_ID;MM_DOC.head.appendChild(style)}
     style.textContent=css;
   }catch(e){console.error('[暮迟地图] CSS加载失败',e)}
 }
 async function loadData(){
-  try{mmData=await jsonNoCache('Map/map-data.json')}catch(e){console.error('[暮迟地图] 数据加载失败',e);throw e}
+  try{mmData=await jsonNoCache('Maps/map-data.json')}catch(e){console.error('[暮迟地图] 数据加载失败',e);throw e}
   return mmData;
 }
 async function getStat(){
@@ -121,7 +121,7 @@ function bind(root){
 function showLoadError(root,e){
   try{
     root.classList.add('mm-open');root.setAttribute('aria-hidden','false');
-    const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML=`<div><b>地图资源加载失败</b><br><span>${esc(e?.message||e||'未知错误')}</span><br><small>请确认 GitHub 仓库已上传 Map/index.js、Map/style.css、Map/map-data.json 与 Assets/暮迟市地图.png。</small></div>`}
+    const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML=`<div><b>地图资源加载失败</b><br><span>${esc(e?.message||e||'未知错误')}</span><br><small>请确认 GitHub 仓库已上传 Maps/index.js、Maps/style.css、Maps/map-data.json 与 Assets/暮迟市地图.png。</small></div>`}
   }catch(_){}
 }
 async function refreshResources(){const root=mount();root.classList.add('mm-refreshing');try{await Promise.all([loadStyle(true),loadData()]);mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=asset(mmData.map.image);render(root);if(!view.touched)setTimeout(()=>fitView(root),30)}catch(e){console.error('[暮迟地图] 刷新失败',e)}finally{root.classList.remove('mm-refreshing')}}
