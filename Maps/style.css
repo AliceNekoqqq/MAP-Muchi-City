@@ -1,10 +1,10 @@
-/* 暮迟市地图 v2.3.0 · adaptive terminal layout */
+/* 暮迟市地图 v2.3.1 · desktop viewport isolation hotfix */
 :root{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
 body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-root,.mm-root *{box-sizing:border-box}
 .mm-root{
-  --detail-w:360px;
+  --detail-w:360px;--head-h:64px;--desktop-w:min(1420px,calc(100vw - 40px));--desktop-h:min(780px,calc(100vh - 40px));
   position:fixed!important;inset:0!important;z-index:2147483646!important;
   display:none;align-items:center;justify-content:center;
   padding:20px;
@@ -19,8 +19,9 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-root button{font-family:inherit}
 .mm-shell{
   position:relative;
-  width:min(1420px,calc(100vw - 40px),calc(150vh - 162px + var(--detail-w)));
-  height:auto;
+  width:var(--desktop-w);
+  height:var(--desktop-h);
+  max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);
   display:flex;flex-direction:column;
   overflow:hidden;
   border:1px solid rgba(196,211,212,.16);
@@ -29,7 +30,7 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
   box-shadow:0 28px 90px rgba(0,0,0,.58),inset 0 1px 0 rgba(255,255,255,.025);
 }
 .mm-head{
-  height:64px;flex:0 0 64px;
+  height:var(--head-h);flex:0 0 var(--head-h);
   display:flex;align-items:center;gap:18px;
   padding:10px 13px 10px 18px;
   border-bottom:1px solid rgba(196,211,212,.12);
@@ -48,8 +49,9 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-controls .mm-zoom-label{min-width:58px;font-size:9px;color:#829396;font-variant-numeric:tabular-nums}
 .mm-controls .mm-text-btn{display:flex;align-items:center;gap:5px;font-size:9px;letter-spacing:.06em}.mm-controls .mm-text-btn i{font-style:normal;font-size:13px;color:#99c7c8}
 .mm-controls .mm-close{margin-left:4px;font-size:19px;color:#c79ba7}
-.mm-content{display:grid;grid-template-columns:minmax(0,1fr) var(--detail-w);align-items:stretch;min-height:0;background:#050809}
-.mm-map-area{position:relative;min-width:0;aspect-ratio:3/2;background:#030506;overflow:hidden}
+.mm-content{display:grid;grid-template-columns:minmax(0,1fr) var(--detail-w);align-items:stretch;flex:1 1 auto;height:0;min-height:0;overflow:hidden;background:#050809}
+/* Desktop map viewport is a fixed grid cell. Do not put aspect-ratio on this grid item: detail content can otherwise stretch the row and force the map cell to overflow into the detail rail. */
+.mm-map-area{position:relative;z-index:1;min-width:0;min-height:0;width:100%;height:100%;background:#030506;overflow:hidden;isolation:isolate}
 .mm-hint{position:absolute;left:12px;top:10px;z-index:7;padding:6px 9px;border:1px solid rgba(206,221,221,.12);border-radius:9px;background:rgba(7,10,11,.80);color:#819194;font-size:8px;letter-spacing:.06em;pointer-events:none;backdrop-filter:blur(5px)}
 .mm-viewport{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain;background:#050707;scrollbar-width:thin;scrollbar-color:#263337 #070b0d;touch-action:pan-x pan-y;cursor:grab}
 .mm-viewport.dragging{cursor:grabbing;user-select:none}
@@ -64,25 +66,25 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-hotspot.selected::before{border-color:#a8dcdd;box-shadow:0 0 0 3px rgba(130,198,201,.10),0 0 17px rgba(128,202,205,.26)}
 .mm-hotspot.selected::after{border-color:rgba(216,245,245,.13)}
 .mm-hotspot.current::after{border-color:rgba(223,155,176,.82);box-shadow:0 0 0 4px rgba(205,114,142,.09),0 0 16px rgba(210,117,145,.22)}
-.mm-detail{min-width:0;min-height:0;overflow:auto;border-left:1px solid rgba(196,211,212,.11);background:linear-gradient(180deg,#0e1416,#090d0f);scrollbar-width:thin;scrollbar-color:#29373a transparent}
+.mm-detail{position:relative;z-index:2;min-width:0;min-height:0;width:100%;height:100%;overflow:auto;overscroll-behavior:contain;border-left:1px solid rgba(196,211,212,.11);background:linear-gradient(180deg,#0e1416,#090d0f);scrollbar-width:thin;scrollbar-color:#29373a transparent}
 .mm-detail-empty{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:34px;text-align:center}
 .mm-detail-empty i{display:flex;width:58px;height:58px;align-items:center;justify-content:center;border:1px solid rgba(153,194,197,.18);border-radius:50%;font:500 12px Georgia,serif;color:#789093}
 .mm-detail-empty b{margin-top:14px;font-family:"Noto Serif SC","Songti SC",serif;font-size:14px;letter-spacing:.12em}
 .mm-detail-empty span{max-width:250px;margin-top:8px;color:#6b7d80;font-size:9px;line-height:1.8}
 .mm-detail-empty.mm-error i{color:#d59cab;border-color:rgba(213,156,171,.25)}
 .mm-card{min-height:100%;background:linear-gradient(180deg,rgba(255,255,255,.012),transparent 48%)}
-.mm-photo{position:relative;height:220px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#1a2428,#090d0f)}
+.mm-photo{position:relative;height:190px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#1a2428,#090d0f)}
 .mm-photo img{width:100%;height:100%;display:block;object-fit:cover}
 .mm-photo.no-image::before{content:"暂无区域影像";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#627579;font-size:9px}
 .mm-photo-fade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 46%,rgba(7,11,13,.92))}
 .mm-photo em{position:absolute;left:16px;bottom:11px;font:500 31px Georgia,serif;color:rgba(235,244,243,.84);font-style:normal}
-.mm-card-body{padding:16px 17px 22px}
+.mm-card-body{padding:15px 16px 18px}
 .mm-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .mm-card-top small{display:block;color:#687a7e;font-size:8px;letter-spacing:.13em}
 .mm-card-top h2{margin:4px 0 0;font-family:"Noto Serif SC","Songti SC",serif;font-size:21px;font-weight:600;letter-spacing:.09em}
 .mm-current-badge{margin-top:4px;padding:4px 7px;border:1px solid rgba(219,154,174,.22);border-radius:999px;background:rgba(211,128,153,.05);color:#d7a2b2;font-size:7px;white-space:nowrap}
-.mm-desc{margin:12px 0 0;color:#aebcbb;font-family:"Noto Serif SC","Songti SC",serif;font-size:11px;line-height:1.8}
-.mm-facts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:14px}
+.mm-desc{margin:10px 0 0;color:#aebcbb;font-family:"Noto Serif SC","Songti SC",serif;font-size:11px;line-height:1.8}
+.mm-facts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
 .mm-facts div{padding:8px 9px;border:1px solid rgba(196,211,212,.08);border-radius:9px;background:rgba(255,255,255,.012)}
 .mm-facts span{display:block;color:#617377;font-size:7px}.mm-facts b{display:block;margin-top:4px;font-size:9px;font-weight:550}
 .mm-facts b.safe{color:#9dc7bd}.mm-facts b.warn{color:#c7b28f}.mm-facts b.danger{color:#d19aaa}
@@ -90,16 +92,14 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 .mm-metric>span{color:#627478;font-size:8px}.mm-metric>b{text-align:right;color:#aab9b8;font:500 9px Georgia,serif}
 .mm-meter{height:3px;border-radius:9px;background:#1a2629;overflow:hidden}.mm-meter i{display:block;height:100%;border-radius:9px;background:#78b9bb}.mm-meter i.horde{background:#b77488}
 .mm-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}.mm-tags i{padding:3px 6px;border:1px solid rgba(196,211,212,.09);border-radius:999px;color:#829497;font-size:7px;font-style:normal}
-.mm-sub{margin-top:16px;border-top:1px solid rgba(196,211,212,.08)}
+.mm-sub{margin-top:13px;border-top:1px solid rgba(196,211,212,.08)}
 .mm-sub header{display:flex;align-items:center;justify-content:space-between;padding:11px 0 7px}.mm-sub header b{font-size:9px;font-weight:550;color:#aebdbc}.mm-sub header span{color:#5e7175;font:500 9px Georgia,serif}
 .mm-subrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid rgba(196,211,212,.055);font-size:8px}.mm-subrow span{color:#788b8e}.mm-subrow b{color:#bdc9c8;font-weight:500}
 .mm-none{padding:12px 0;color:#5d7074;font-size:8px}.mm-update{margin-top:14px;color:#4f6266;font-size:7px;text-align:right}
 
 /* Medium desktop: narrow the information rail before switching to stacked layout. */
 @media(max-width:1120px) and (min-width:901px){
-  .mm-root{--detail-w:320px}
-  .mm-shell{width:min(1080px,calc(100vw - 28px),calc(150vh - 138px + var(--detail-w)))}
-  .mm-head{height:60px;flex-basis:60px;padding-left:15px}.mm-title b{font-size:17px}.mm-location{min-width:105px}.mm-card-body{padding:14px 15px 18px}.mm-photo{height:190px}
+  .mm-head{padding-left:15px}.mm-title b{font-size:17px}.mm-location{min-width:105px}.mm-card-body{padding:13px 14px 16px}.mm-photo{height:170px}
 }
 
 /* Tablet / phone: map and detail become one natural vertical document. */
@@ -107,14 +107,14 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
   html,body{height:100%;overflow:hidden!important;background:#050809!important}
   .mm-root{display:none;align-items:stretch;justify-content:flex-start;padding:0;background:#050809;backdrop-filter:none;-webkit-backdrop-filter:none;overflow-y:auto!important;overflow-x:hidden!important}
   .mm-root.open{display:block!important}
-  .mm-shell{position:relative;width:100%;min-height:100%;height:auto;border:0;border-radius:0;box-shadow:none;overflow:visible;background:#050809}
+  .mm-shell{position:relative;width:100%!important;max-width:none!important;min-height:100%;height:auto!important;max-height:none!important;border:0;border-radius:0;box-shadow:none;overflow:visible;background:#050809}
   .mm-head{position:sticky;top:0;z-index:30;height:58px;flex-basis:58px;gap:9px;padding:8px 10px 8px 13px;border-bottom-color:rgba(196,211,212,.12);background:rgba(9,14,16,.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
   .mm-title b{font-size:16px;letter-spacing:.10em}.mm-title span{display:none}.mm-location{display:none}
   .mm-controls{gap:4px}.mm-controls button{height:34px;min-width:34px;padding:0 8px;border-radius:10px}.mm-controls .mm-zoom-label{min-width:52px;padding:0 6px}.mm-controls .mm-text-btn{min-width:34px;padding:0;justify-content:center}.mm-controls .mm-text-btn span{display:none}.mm-controls .mm-text-btn i{font-size:15px}.mm-controls .mm-close{margin-left:1px}
-  .mm-content{display:block;min-height:0;background:#050809}
+  .mm-content{display:block;height:auto;min-height:0;overflow:visible;flex:none;background:#050809}
   .mm-map-area{position:relative;width:100%;height:auto;aspect-ratio:3/2;min-height:0;border-bottom:1px solid rgba(196,211,212,.10)}
   .mm-hint{left:8px;top:8px;max-width:calc(100% - 16px);padding:5px 8px;font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mm-detail{position:relative;left:auto;right:auto;bottom:auto;max-height:none;overflow:visible;border:0;border-left:0;border-top:1px solid rgba(196,211,212,.08);border-radius:0;background:linear-gradient(180deg,#0d1315,#090d0f);box-shadow:none;transform:none!important;transition:none}
+  .mm-detail{position:relative;left:auto;right:auto;bottom:auto;width:100%;height:auto;max-height:none;overflow:visible;border:0;border-left:0;border-top:1px solid rgba(196,211,212,.08);border-radius:0;background:linear-gradient(180deg,#0d1315,#090d0f);box-shadow:none;transform:none!important;transition:none}
   .mm-detail-empty{min-height:180px;padding:28px 20px}.mm-card{min-height:0;display:grid;grid-template-columns:minmax(190px,.86fr) 1.3fr}.mm-photo{height:auto;min-height:250px}.mm-card-body{padding:15px 16px 19px}.mm-card-top h2{font-size:20px}.mm-desc{margin-top:9px;font-size:10px}.mm-sub{margin-top:13px}.mm-update{margin-top:10px}
   .mm-hotspot{width:36px;height:36px}
 }
@@ -129,5 +129,5 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 @media(max-width:380px){
   .mm-title b{font-size:14px}.mm-controls .mm-zoom-label{display:none}.mm-controls button{min-width:31px;width:31px;padding:0}.mm-facts{grid-template-columns:1fr 1fr}.mm-photo{height:160px;min-height:160px}
 }
-@media(max-height:650px) and (min-width:901px){.mm-root{padding:10px}.mm-head{height:56px;flex-basis:56px}.mm-shell{width:min(1280px,calc(100vw - 20px),calc(150vh - 114px + var(--detail-w)))}}
+@media(max-height:650px) and (min-width:901px){.mm-root{padding:10px}.mm-title b{font-size:17px}.mm-photo{height:150px}.mm-card-body{padding:12px 14px 15px}.mm-desc{font-size:10px}.mm-sub{margin-top:10px}}
 @media(prefers-reduced-motion:reduce){.mm-hotspot::before,.mm-hotspot::after,.mm-controls button{transition:none}}
