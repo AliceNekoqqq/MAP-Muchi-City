@@ -1,7 +1,6 @@
 const MM_BASES = [
-  'https://testingcf.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
-  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
-  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@main/',
+  'https://cdn.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.0/',
+  'https://fastly.jsdelivr.net/gh/AliceNekoqqq/MAP-Muchi-City@v1.0.0/'
 ];
 const MM_STYLE_ID = 'muchi-map-style-v1';
 const MM_ROOT_ID = 'muchi-map-overlay';
@@ -33,12 +32,8 @@ async function loadData(){
   return mmData;
 }
 async function getStat(){
-  try{
-    const fn=(typeof getVariables==='function')?getVariables:null;
-    if(!fn)return {};
-    const v=await Promise.resolve(fn({type:'message',message_id:'latest'}));
-    return v?.stat_data||v||{};
-  }catch(e){console.warn('[暮迟地图] 无法读取MVU',e);return {}}
+  try{const v=getAllVariables()||{};return v?.stat_data||v||{}}
+  catch(e){console.warn('[暮迟地图] 无法读取MVU',e);return {}}
 }
 function locState(name){return mmStat?.地图?.地点动态?.[name]||{}}
 function currentName(){return mmStat?.世界?.当前地点||'未知'}
@@ -143,12 +138,9 @@ async function openMap(){
 }
 function closeMap(){const root=MM_DOC.getElementById(MM_ROOT_ID);if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true')}}
 function installTriggers(){
-  MM_HOST.__muchiMapOpen=()=>openMap();
   MM_HOST.MuchiMap={open:openMap,close:closeMap,refresh:refreshResources};
-  if(!MM_HOST.__muchiMapScriptButtonBound){
-    try{appendInexistentScriptButtons?.([{name:'暮迟地图',visible:true}]);eventOn?.(getButtonEvent?.('暮迟地图'),()=>MM_HOST.__muchiMapOpen?.());MM_HOST.__muchiMapScriptButtonBound=true}catch(e){console.warn('[暮迟地图] 酒馆助手按钮注册失败',e)}
-  }
-  if(!MM_HOST.__muchiMapDomBound){MM_DOC.addEventListener('muchi:open-map',()=>MM_HOST.__muchiMapOpen?.());MM_HOST.__muchiMapDomBound=true}
+  eventOn(getButtonEvent('暮迟地图'),openMap);
+  eventOn('muchi:open-map',openMap);
 }
 installTriggers();
 export {openMap,closeMap,refreshResources};
