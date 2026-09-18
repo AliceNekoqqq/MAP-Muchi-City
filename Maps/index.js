@@ -15,8 +15,9 @@ const MM_BASES = [
   MM_MODULE_BASE,
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ];
-const MM_STYLE_ID = 'muchi-map-style-v103';
-const MM_CRITICAL_STYLE_ID = 'muchi-map-critical-v103';
+const MM_STYLE_ID = 'muchi-map-style-v104';
+const MM_CRITICAL_STYLE_ID = 'muchi-map-critical-v104';
+const MM_HOST_ID = 'muchi-map-host-v104';
 const MM_ROOT_ID = 'muchi-map-overlay';
 const MM_HOST = resolveHostWindow();
 const MM_DOC = MM_HOST.document;
@@ -26,11 +27,24 @@ let mmData=null, mmStat=null, mmSelected='', mmShowLocations=true, mmShowDistric
 let view={scale:1,x:0,y:0,minScale:.2,maxScale:3.6,touched:false};
 let pointers=new Map(), dragStart=null, pinchStart=null;
 
+function hostCss(){return 'position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:2147483646!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:none!important;contain:none!important;isolation:isolate!important'}
+function getMapHost(){return MM_DOC.getElementById(MM_HOST_ID)}
+function getShadow(){return getMapHost()?.shadowRoot||null}
+function getMapRoot(){return getShadow()?.getElementById(MM_ROOT_ID)||null}
+function ensureHost(){
+  let host=getMapHost();
+  if(host&&host.shadowRoot)return host;
+  try{host?.remove()}catch{}
+  host=MM_DOC.createElement('div');host.id=MM_HOST_ID;host.style.cssText=hostCss();
+  (MM_DOC.body||MM_DOC.documentElement).appendChild(host);
+  host.attachShadow({mode:'open'});
+  return host;
+}
 function installCriticalStyle(){
-  if(MM_DOC.getElementById(MM_CRITICAL_STYLE_ID))return;
+  const host=ensureHost(),shadow=host.shadowRoot;if(shadow.getElementById(MM_CRITICAL_STYLE_ID))return;
   const style=MM_DOC.createElement('style');style.id=MM_CRITICAL_STYLE_ID;
-  style.textContent=`#${MM_ROOT_ID}{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147482600;display:none;background:rgba(5,8,10,.92);color:#edf3f2;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}#${MM_ROOT_ID}.mm-open{display:block}#${MM_ROOT_ID} *{box-sizing:border-box}#${MM_ROOT_ID} .mm-shell{position:absolute;top:8px;right:8px;bottom:8px;left:8px;overflow:hidden;border:1px solid rgba(194,216,219,.22);border-radius:18px;background:#0b1012}#${MM_ROOT_ID} .mm-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid rgba(188,209,212,.16)}#${MM_ROOT_ID} .mm-title{flex:1}#${MM_ROOT_ID} .mm-title b{display:block;font-size:17px}#${MM_ROOT_ID} .mm-title span,#${MM_ROOT_ID} .mm-current{font-size:9px;color:#91a0a3}#${MM_ROOT_ID} .mm-head-actions{margin-left:auto;display:flex;gap:6px}#${MM_ROOT_ID} button{min-height:36px;border:1px solid rgba(188,209,212,.18);border-radius:9px;background:#12191c;color:#dce7e7}#${MM_ROOT_ID} .mm-body{position:absolute;top:61px;right:0;bottom:0;left:0;display:grid;grid-template-columns:minmax(0,1fr) 320px}#${MM_ROOT_ID} .mm-main{position:relative;min-width:0;min-height:0}#${MM_ROOT_ID} .mm-side{overflow:auto;border-left:1px solid rgba(188,209,212,.16);background:#101619}#${MM_ROOT_ID} .mm-side-empty{display:flex;min-height:100%;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:11px;line-height:1.8;color:#91a0a3}@media(max-width:900px){#${MM_ROOT_ID} .mm-shell{top:0;right:0;bottom:0;left:0;border:0;border-radius:0}#${MM_ROOT_ID} .mm-current{display:none}#${MM_ROOT_ID} .mm-body{grid-template-columns:1fr}#${MM_ROOT_ID} .mm-side{position:absolute;left:8px;right:8px;bottom:8px;max-height:42%;border:1px solid rgba(188,209,212,.16);border-radius:14px}}`;
-  MM_DOC.head.appendChild(style);
+  style.textContent=`:host{all:initial}#${MM_ROOT_ID}{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:1!important;display:none;background:rgba(5,8,10,.94);color:#edf3f2;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;visibility:visible!important;opacity:1!important;pointer-events:auto!important}#${MM_ROOT_ID}.mm-open{display:block!important}#${MM_ROOT_ID} *{box-sizing:border-box}#${MM_ROOT_ID} .mm-shell{position:absolute;top:8px;right:8px;bottom:8px;left:8px;overflow:hidden;border:1px solid rgba(194,216,219,.22);border-radius:18px;background:#0b1012}#${MM_ROOT_ID} .mm-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid rgba(188,209,212,.16)}#${MM_ROOT_ID} .mm-title{flex:1}#${MM_ROOT_ID} .mm-title b{display:block;font-size:17px}#${MM_ROOT_ID} .mm-title span,#${MM_ROOT_ID} .mm-current{font-size:9px;color:#91a0a3}#${MM_ROOT_ID} .mm-head-actions{margin-left:auto;display:flex;gap:6px}#${MM_ROOT_ID} button{min-height:36px;border:1px solid rgba(188,209,212,.18);border-radius:9px;background:#12191c;color:#dce7e7}#${MM_ROOT_ID} .mm-body{position:absolute;top:61px;right:0;bottom:0;left:0;display:grid;grid-template-columns:minmax(0,1fr) 320px}#${MM_ROOT_ID} .mm-main{position:relative;min-width:0;min-height:0}#${MM_ROOT_ID} .mm-side{overflow:auto;border-left:1px solid rgba(188,209,212,.16);background:#101619}#${MM_ROOT_ID} .mm-side-empty{display:flex;min-height:100%;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:11px;line-height:1.8;color:#91a0a3}@media(max-width:900px){#${MM_ROOT_ID} .mm-shell{top:0;right:0;bottom:0;left:0;border:0;border-radius:0}#${MM_ROOT_ID} .mm-current{display:none}#${MM_ROOT_ID} .mm-body{grid-template-columns:1fr}#${MM_ROOT_ID} .mm-side{position:absolute;left:8px;right:8px;bottom:8px;max-height:42%;border:1px solid rgba(188,209,212,.16);border-radius:14px}}`;
+  shadow.appendChild(style);
 }
 
 function cacheBust(url){return `${url}${url.includes('?')?'&':'?'}t=${Date.now()}`}
@@ -40,11 +54,11 @@ async function textNoCache(path){let last;for(let i=0;i<MM_BASES.length;i++){try
 async function jsonNoCache(path){return JSON.parse(await textNoCache(path))}
 
 async function loadStyle(force=false){
-  let style=MM_DOC.getElementById(MM_STYLE_ID);
+  installCriticalStyle();const shadow=getShadow();let style=shadow?.getElementById(MM_STYLE_ID);
   if(style&&!force)return;
   try{
     const css=await textNoCache('Maps/style.css');
-    if(!style){style=MM_DOC.createElement('style');style.id=MM_STYLE_ID;MM_DOC.head.appendChild(style)}
+    if(!style){style=MM_DOC.createElement('style');style.id=MM_STYLE_ID;shadow.appendChild(style)}
     style.textContent=css;
   }catch(e){console.error('[暮迟地图] CSS加载失败',e);throw e}
 }
@@ -86,9 +100,9 @@ function rootHtml(){return `<div class="mm-shell" role="dialog" aria-modal="true
   </div>
 </div>`}
 function mount(){
-  installCriticalStyle();
-  let root=MM_DOC.getElementById(MM_ROOT_ID);if(root)return root;
-  root=MM_DOC.createElement('div');root.id=MM_ROOT_ID;root.setAttribute('aria-hidden','true');root.innerHTML=rootHtml();MM_DOC.body.appendChild(root);
+  installCriticalStyle();const host=ensureHost(),shadow=host.shadowRoot;
+  let root=getMapRoot();if(root)return root;
+  root=MM_DOC.createElement('div');root.id=MM_ROOT_ID;root.setAttribute('aria-hidden','true');root.innerHTML=rootHtml();shadow.appendChild(root);
   bind(root);return root;
 }
 function populateSearch(root){
@@ -140,39 +154,53 @@ function bind(root){
   MM_HOST.addEventListener?.('resize',()=>{if(root.classList.contains('mm-open')&&!view.touched)fitView(root)});
 }
 
+function setHostOpen(open){const host=ensureHost();host.style.setProperty('pointer-events',open?'auto':'none','important');host.style.setProperty('visibility','visible','important');host.style.setProperty('opacity','1','important');host.style.setProperty('display','block','important')}
+function ensureVisible(root){
+  setHostOpen(true);root.classList.add('mm-open');root.setAttribute('aria-hidden','false');
+  const r=root.getBoundingClientRect();
+  if(r.width<100||r.height<100){root.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;background:rgba(5,8,10,.94)!important;z-index:1!important'}
+}
 function showLoadError(root,e){
   try{
-    root.classList.add('mm-open');root.setAttribute('aria-hidden','false');
+    ensureVisible(root);
     const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML=`<div><b>地图资源加载失败</b><br><span>${esc(e?.message||e||'未知错误')}</span><br><small>请确认 GitHub 仓库已上传 Maps/index.js、Maps/style.css、Maps/map-data.json 与 Assets/暮迟市地图.png。</small></div>`}
   }catch(_){}
 }
 async function refreshResources(){const root=mount();root.classList.add('mm-refreshing');try{await Promise.all([loadStyle(true),loadData()]);mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=asset(mmData.map.image);render(root);if(!view.touched)setTimeout(()=>fitView(root),30)}catch(e){console.error('[暮迟地图] 刷新失败',e)}finally{root.classList.remove('mm-refreshing')}}
 async function openMap(){
-  const root=mount();root.classList.add('mm-open','mm-refreshing');root.setAttribute('aria-hidden','false');
+  const root=mount();ensureVisible(root);root.classList.add('mm-refreshing');
   try{
     await loadStyle();await loadData();mmStat=await getStat();
     const img=root.querySelector('.mm-map-image');
-    img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=asset(mmData.map.image,1)}};
+    img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=asset(mmData.map.image,1)}else{const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML='<div><b>地图底图加载失败</b><br><span>界面已打开，但底图资源无法读取。</span></div>'}}};
     img.src=asset(mmData.map.image);render(root);
     const cur=currentName();if(!mmSelected&&byName(cur))mmSelected=cur;render(root);
-    requestAnimationFrame(()=>{fitView(root);if(mmSelected)centerOn(root,mmSelected,Math.max(view.scale,view.scale*1.28))});
+    requestAnimationFrame(()=>{ensureVisible(root);fitView(root);if(mmSelected)centerOn(root,mmSelected,Math.max(view.scale,view.scale*1.28))});
+    setTimeout(()=>ensureVisible(root),80);
   }catch(e){console.error('[暮迟地图] 打开失败',e);showLoadError(root,e)}finally{root.classList.remove('mm-refreshing')}
+  return root;
 }
-function closeMap(){const root=MM_DOC.getElementById(MM_ROOT_ID);if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true')}}
+function closeMap(){const root=getMapRoot();if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true');root.removeAttribute('style')}setHostOpen(false)}
 let mmBound=false;
+function accessibleWindows(){const out=[],seen=new Set();let w=window;for(let i=0;i<8;i++){try{if(!seen.has(w)){out.push(w);seen.add(w)}if(!w.parent||w.parent===w)break;void w.parent.document;w=w.parent}catch(_){break}}return out}
+function accessibleDocs(){return accessibleWindows().map(w=>{try{return w.document}catch{return null}}).filter(Boolean)}
 function publishApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshResources};
-  try{MM_HOST.MuchiMap=api}catch{}
-  try{window.MuchiMap=api}catch{}
+  const api={open:openMap,close:closeMap,refresh:refreshResources,version:'1.0.4'};
+  for(const w of accessibleWindows())try{w.MuchiMap=api}catch{}
+  try{MM_HOST.MuchiMap=api}catch{};try{window.MuchiMap=api}catch{};
   return api;
 }
+function bindClickBridge(doc){
+  try{if(doc.__muchiMapBridgeV104)return;doc.__muchiMapBridgeV104=true;doc.addEventListener('click',e=>{const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;e.preventDefault();e.stopImmediatePropagation?.();e.stopPropagation();openMap()},true)}catch(e){console.warn('[暮迟地图] 文档入口绑定失败',e)}
+}
 function installTriggers(){
-  publishApi();
+  publishApi();accessibleDocs().forEach(bindClickBridge);
   if(mmBound)return;mmBound=true;
   try{if(typeof eventOn==='function'&&typeof getButtonEvent==='function')eventOn(getButtonEvent('暮迟地图'),openMap)}catch(e){console.error('[暮迟地图] 按钮绑定失败',e)}
   try{if(typeof eventOn==='function')eventOn('muchi:open-map',openMap)}catch(e){console.warn('[暮迟地图] 自定义事件绑定失败',e)}
-  try{MM_DOC.addEventListener('click',e=>{const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;e.preventDefault();e.stopPropagation();openMap()},true)}catch(e){console.warn('[暮迟地图] 状态栏入口绑定失败',e)}
 }
 publishApi();
 try{if(typeof $==='function')$(()=>installTriggers());else setTimeout(installTriggers,0)}catch{setTimeout(installTriggers,0)}
+setTimeout(()=>{publishApi();accessibleDocs().forEach(bindClickBridge)},700);
+export const VERSION='1.0.4';
 export {openMap,closeMap,refreshResources};
