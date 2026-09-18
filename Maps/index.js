@@ -1,6 +1,6 @@
-/* 暮迟市地图 v2.2.0
+/* 暮迟市地图 v2.3.0
  * 01-11 是唯一交互对象。
- * v2.2.0: 按 Tavern Helper 官方 iframe 挂载模型重写；按钮绑定移回角色卡脚本本体。
+ * v2.3.0: 自适应面板布局；桌面端地图与详情同屏等高，移动端详情紧随地图自然滚动。
  * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
  */
 function resolveTavernDocument(){
@@ -24,9 +24,9 @@ const MM_BASES=[
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const FRAME_ID='muchi-map-frame-v220';
-const ROOT_ID='muchi-map-v220';
-const OLD_IDS=['muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
+const FRAME_ID='muchi-map-frame-v230';
+const ROOT_ID='muchi-map-v230';
+const OLD_IDS=['muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -47,7 +47,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.2.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.3.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -62,7 +62,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.2.0]',text);
+  console.error('[暮迟地图 v2.3.0]',text);
 }
 
 function cleanupStale(){
@@ -93,13 +93,13 @@ function shellHtml(){return `<section id="${ROOT_ID}" class="mm-root open" role=
         <button type="button" data-act="zoom-out" aria-label="缩小">−</button>
         <button class="mm-zoom-label" type="button" data-act="fit" title="适应窗口"><span data-ui="zoom">100%</span></button>
         <button type="button" data-act="zoom-in" aria-label="放大">＋</button>
-        <button class="mm-text-btn" type="button" data-act="locate">定位</button>
+        <button class="mm-text-btn" type="button" data-act="locate" aria-label="定位当前区域"><i>◎</i><span>定位</span></button>
         <button class="mm-close" type="button" data-act="close" aria-label="关闭">×</button>
       </div>
     </header>
     <div class="mm-content">
       <main class="mm-map-area">
-        <div class="mm-hint">拖动查看 · 点击底图上的 01–11 编号查看区域信息</div>
+        <div class="mm-hint">拖动 · 点击 01–11 查看区域</div>
         <div class="mm-viewport" data-ui="viewport">
           <div class="mm-stage" data-ui="stage">
             <img class="mm-map" data-ui="map" alt="暮迟市城市地图" draggable="false">
@@ -240,6 +240,7 @@ function selectRegion(root,id,center=false){
 
 function bindRoot(root){
   root.addEventListener('click',e=>{
+    if(e.target===root){closeMap();return}
     const spot=e.target.closest?.('[data-region]');if(spot){e.preventDefault();e.stopPropagation();selectRegion(root,spot.dataset.region,false);return}
     const b=e.target.closest?.('[data-act]');if(!b)return;const a=b.dataset.act;
     if(a==='close')return closeMap();
@@ -300,14 +301,14 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.2.0'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.3.0'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
 }
 function bindDocument(){
   try{
-    const key='__muchiMapBridgeV220';
+    const key='__muchiMapBridgeV230';
     if(MM_DOC[key])return;MM_DOC[key]=true;
     MM_DOC.addEventListener('click',e=>{
       const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
@@ -323,4 +324,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.2.0';
+export const VERSION='2.3.0';
