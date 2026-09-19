@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.4.1 · compact map terminal + floating detail card + draggable PC window */
+/* 暮迟市地图 v2.5.0 · compact map terminal + floating detail card + draggable PC window */
 :root{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
 body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
@@ -67,3 +67,11 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 }
 @media(max-height:650px){.mm-root:not(.mm-mobile) .mm-title b{font-size:16px}.mm-root:not(.mm-mobile) .mm-photo{height:96px}.mm-root:not(.mm-mobile) .mm-card-body{padding:10px 12px 12px}.mm-root:not(.mm-mobile) .mm-desc{font-size:8px}.mm-root:not(.mm-mobile) .mm-sub{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){.mm-hotspot::before,.mm-hotspot::after,.mm-controls button,.mm-detail{transition:none}}
+
+/* v2.5.0 · player-visible intelligence layer */
+.mm-card-badges{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}.mm-intel-badge{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border:1px solid rgba(154,184,187,.14);border-radius:999px;background:rgba(255,255,255,.025);color:#84979a;font-size:7px;letter-spacing:.08em}.mm-intel-badge.confirmed{border-color:rgba(111,174,158,.24);color:#9dc6b8;background:rgba(80,143,126,.08)}.mm-intel-badge.rumor{border-color:rgba(184,157,103,.24);color:#c7b27e;background:rgba(154,123,60,.07)}.mm-intel-badge.stale{border-color:rgba(161,126,134,.22);color:#b99ca4;background:rgba(134,83,95,.07)}.mm-intel-badge.unknown{color:#6d7b7e}
+.mm-metric.is-unknown{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:center}.mm-metric.is-unknown>b{color:#66777a}.mm-metric.is-unknown>small{grid-column:1/-1;color:#58676a;font-size:7px;line-height:1.5}.mm-trend{display:block;margin-top:4px;font-size:7px!important;font-weight:400!important;letter-spacing:0!important}.mm-trend.up{color:#b98b93}.mm-trend.down{color:#80a99f}.mm-trend.flat{color:#7f9294}
+.mm-intel-empty{margin-top:12px;padding:10px 11px;border:1px dashed rgba(154,184,187,.12);border-radius:9px;background:rgba(255,255,255,.018);color:#6a7c7f;font-size:8px;line-height:1.65}.mm-intel-summary{margin-top:12px;padding:10px 11px;border:1px solid rgba(154,184,187,.10);border-radius:9px;background:rgba(255,255,255,.018)}.mm-intel-summary p{margin:0 0 8px!important;color:#9aa9a9!important;font-size:8px!important;line-height:1.65!important}.mm-intel-summary>div{display:grid;grid-template-columns:44px 1fr;gap:8px;margin-top:4px;font-size:7px}.mm-intel-summary span{color:#5e6e71}.mm-intel-summary b{color:#899b9d;font-weight:500}
+.mm-hotspot.intel-unknown{filter:saturate(.55);opacity:.78}.mm-hotspot.intel-unknown::after{border-style:dashed!important;opacity:.55}.mm-hotspot.intel-rumor::after{border-color:rgba(198,171,116,.44)!important}.mm-hotspot.intel-confirmed::after{border-color:rgba(126,192,174,.42)!important}.mm-hotspot.intel-stale{opacity:.72}.mm-hotspot.intel-stale::after{border-color:rgba(168,126,139,.34)!important}
+.mm-update{line-height:1.5}
+@media(max-width:720px){.mm-card-badges{justify-content:flex-start;margin-top:5px}.mm-intel-summary{margin-top:10px}.mm-intel-empty{margin-top:10px}}

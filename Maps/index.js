@@ -1,6 +1,7 @@
-/* 暮迟市地图 v2.4.1
+/* 暮迟市地图 v2.5.0
  * 01-11 是唯一交互对象。
- * v2.4.1: 在 v2.4.0 紧凑浮卡基础上，为 PC 悬浮地图窗口增加标题栏拖动；手机端不启用窗口拖动。
+ * v2.5.0: 地图动态层改读 /地图/区域情报。真实地点动态与玩家可见情报分层，初始全部未知；MR-87 日结算逐步揭示资源、尸群与通行信息，并显示来源、置信度、趋势与过期状态。
+ * 保留 v2.4.2 的 PC 标题栏拖动修复。手机端不启用窗口拖动。
  * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
  */
 function resolveTavernDocument(){
@@ -24,10 +25,10 @@ const MM_BASES=[
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const FRAME_ID='muchi-map-frame-v241';
-const ROOT_ID='muchi-map-v241';
-const DRAG_LAYER_ID='muchi-map-drag-layer-v241';
-const OLD_IDS=['muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
+const FRAME_ID='muchi-map-frame-v250';
+const ROOT_ID='muchi-map-v250';
+const DRAG_LAYER_ID='muchi-map-drag-layer-v250';
+const OLD_IDS=['muchi-map-frame-v242','muchi-map-v242','muchi-map-frame-v241','muchi-map-v241','muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -50,7 +51,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.4.1`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.5.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -75,7 +76,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.4.1]',text);
+  console.error('[暮迟地图 v2.5.0]',text);
 }
 
 function cleanupStale(){
@@ -204,56 +205,52 @@ function currentRegion(){
   const loc=currentLocation();
   return mapData?.regions?.find(r=>r.name===loc||(r.aliases||[]).includes(loc))||null;
 }
-function dynFor(name){return statData?.地图?.地点动态?.[name]||null}
-function aggregateRegion(region){
-  const names=[region.name,...(region.members||[])];
-  const states=names.map(n=>({name:n,state:dynFor(n)})).filter(x=>x.state&&typeof x.state==='object');
-  if(!states.length)return {states:[],resource:null,horde:null,passage:'暂无记录',tags:[],updated:'未知'};
-  const avg=k=>{const a=states.map(x=>Number(x.state?.[k])).filter(Number.isFinite);return a.length?Math.round(a.reduce((s,n)=>s+n,0)/a.length):null};
-  const order={'可通行':0,'谨慎通行':1,'受阻':2,'封锁':3};
-  let passage='暂无记录',rank=-1;
-  for(const x of states){const p=x.state?.通行状态;if(p in order&&order[p]>rank){rank=order[p];passage=p}}
-  const tags=[...new Set(states.flatMap(x=>Array.isArray(x.state?.动态标签)?x.state.动态标签:[]))].slice(0,8);
-  const times=states.map(x=>x.state?.最后更新时间).filter(Boolean);
-  return {states,resource:avg('资源指数'),horde:avg('尸群指数'),passage,tags,updated:times.at(-1)||'未知'};
+function intelFor(region){return statData?.地图?.区域情报?.[region?.name]||null}
+function currentDay(){return Number(statData?.世界?.灾变日||0)}
+function intelStatus(region){
+  const x=intelFor(region)||{},raw=String(x.情报状态||'未知'),last=Number(x.最后更新日||0),day=currentDay();
+  if(raw!=='未知'&&last>0&&day-last>=3)return'过期';
+  return['未知','传闻','已确认','过期'].includes(raw)?raw:'未知';
+}
+function intelView(region){
+  const x=intelFor(region)||{},status=intelStatus(region);
+  return{status,resource:x.资源已知?clamp(Number(x.资源指数||0),0,100):null,horde:x.尸群已知?clamp(Number(x.尸群指数||0),0,100):null,passage:String(x.通行状态||'未知'),tags:Array.isArray(x.动态标签)?x.动态标签.slice(0,8):[],summary:String(x.情报摘要||''),source:String(x.情报来源||''),confidence:Number(x.置信度||0),firstDay:Number(x.首次发现日||0),lastDay:Number(x.最后更新日||0),updated:String(x.最后更新时间||''),resourceTrend:String(x.资源趋势||'未知'),hordeTrend:String(x.尸群趋势||'未知')};
 }
 function riskClass(risk){return /极高|高/.test(risk)?'danger':/中/.test(risk)?'warn':'safe'}
-function metricHtml(label,value,cls=''){
-  if(value==null)return `<div class="mm-metric"><span>${esc(label)}</span><b>暂无记录</b></div>`;
-  return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b></div>`;
+function statusClass(s){return s==='已确认'?'confirmed':s==='传闻'?'rumor':s==='过期'?'stale':'unknown'}
+function trendHtml(trend){if(trend==='上升')return'<small class="mm-trend up">↑ 较上次情报上升</small>';if(trend==='下降')return'<small class="mm-trend down">↓ 较上次情报下降</small>';if(trend==='稳定')return'<small class="mm-trend flat">≈ 与上次接近</small>';return''}
+function metricHtml(label,value,cls='',trend='未知'){
+  if(value==null)return `<div class="mm-metric is-unknown"><span>${esc(label)}</span><b>未知</b><small>尚未获得可靠情报</small></div>`;
+  return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b>${trendHtml(trend)}</div>`;
 }
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
-  if(!region){
-    box.classList.remove('is-open');
-    box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';
-    return;
-  }
+  if(!region){box.classList.remove('is-open');box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';return}
   box.classList.add('is-open');
-  const ag=aggregateRegion(region),cur=currentRegion()?.id===region.id;
-  const stateRows=ag.states.length?ag.states.map(x=>`<div class="mm-subrow"><span>${esc(x.name)}</span><b>${esc(x.state?.通行状态||'状态未知')}</b></div>`).join(''):'<div class="mm-none">该区域尚无动态记录</div>';
-  const tags=ag.tags.length?`<div class="mm-tags">${ag.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
+  const intel=intelView(region),cur=currentRegion()?.id===region.id,members=[...(region.members||[])];
+  const memberRows=members.length?members.map(name=>`<div class="mm-subrow"><span>${esc(name)}</span><b>静态地点</b></div>`).join(''):'<div class="mm-none">暂无已登记的附属地点</div>';
+  const tags=intel.tags.length?`<div class="mm-tags">${intel.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
+  const intelMeta=intel.status==='未知'?'<div class="mm-intel-empty">实时资源、尸群与道路情况尚未获得。等待 MR-87 暮迟市频道或后续可靠情报。</div>':`<div class="mm-intel-summary"><p>${esc(intel.summary||'已收到区域情报，但摘要不完整。')}</p><div><span>来源</span><b>${esc(intel.source||'暮迟市公共广播')}</b></div><div><span>置信度</span><b>${clamp(intel.confidence,0,100)}%</b></div></div>`;
   box.innerHTML=`<article class="mm-card">
     <button class="mm-detail-close" type="button" data-act="detail-close" aria-label="收起区域详情">×</button>
     <div class="mm-photo"><img src="${esc(asset(region.image))}" alt="${esc(region.name)}"><div class="mm-photo-fade"></div><em>${esc(region.id)}</em></div>
     <div class="mm-card-body">
-      <div class="mm-card-top"><div><small>${esc(region.type||'区域')}</small><h2>${esc(region.name)}</h2></div>${cur?'<span class="mm-current-badge">当前区域</span>':''}</div>
+      <div class="mm-card-top"><div><small>${esc(region.type||'区域')}</small><h2>${esc(region.name)}</h2></div><div class="mm-card-badges">${cur?'<span class="mm-current-badge">当前区域</span>':''}<span class="mm-intel-badge ${statusClass(intel.status)}">${esc(intel.status)}</span></div></div>
       <p class="mm-desc">${esc(region.description||'')}</p>
-      <div class="mm-facts"><div><span>基础风险</span><b class="${riskClass(region.risk)}">${esc(region.risk||'未知')}</b></div><div><span>通行状态</span><b>${esc(ag.passage)}</b></div></div>
-      ${metricHtml('资源指数',ag.resource)}
-      ${metricHtml('尸群指数',ag.horde,'horde')}
+      <div class="mm-facts"><div><span>基础风险</span><b class="${riskClass(region.risk)}">${esc(region.risk||'未知')}</b></div><div><span>通行情报</span><b>${esc(intel.passage||'未知')}</b></div></div>
+      ${metricHtml('资源指数',intel.resource,'',intel.resourceTrend)}
+      ${metricHtml('尸群指数',intel.horde,'horde',intel.hordeTrend)}
       ${tags}
-      <section class="mm-sub"><header><b>区域内已记录地点</b><span>${ag.states.length||0}</span></header>${stateRows}</section>
-      <div class="mm-update">动态更新时间：${esc(ag.updated)}</div>
+      ${intelMeta}
+      <section class="mm-sub"><header><b>区域内已知地点</b><span>${members.length}</span></header>${memberRows}</section>
+      <div class="mm-update">${intel.status==='未知'?'最后情报：暂无':`最后情报：第${intel.lastDay||'?'}日 · ${esc(intel.updated||'时间未知')}`}</div>
     </div>
   </article>`;
-  const photo=box.querySelector('.mm-photo img');
-  photo?.addEventListener('error',()=>{const wrap=photo.closest('.mm-photo');wrap?.classList.add('no-image');photo.remove()},{once:true});
+  const photo=box.querySelector('.mm-photo img');photo?.addEventListener('error',()=>{const wrap=photo.closest('.mm-photo');wrap?.classList.add('no-image');photo.remove()},{once:true});
 }
 function renderHotspots(root){
-  const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;
-  const cur=currentRegion()?.id||'';
-  layer.innerHTML=(mapData?.regions||[]).map(r=>`<button type="button" class="mm-hotspot${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name)}"><span>${esc(r.id)}</span></button>`).join('');
+  const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;const cur=currentRegion()?.id||'';
+  layer.innerHTML=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
 }
 function render(root){
   const name=root.querySelector('[data-ui="current-name"]');if(name)name.textContent=currentLocation();
@@ -324,7 +321,7 @@ function bindFrameDrag(root){
   const clearLayer=()=>{try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}};
   const stop=()=>{
     clearLayer();
-    try{frame.style.zIndex='2147483647'}catch{}
+    try{frame.style.setProperty('z-index','2147483647','important')}catch{}
     frameDrag=null;
     root.classList.remove('mm-window-dragging');
   };
@@ -335,10 +332,12 @@ function bindFrameDrag(root){
     if(e.target?.closest?.('.mm-controls,button,a,input,select,textarea,[data-no-window-drag]'))return;
     const rect=frame.getBoundingClientRect();
     /* 把居中的 transform 定位固化为像素坐标，之后只移动 iframe 本身。 */
-    frame.style.left=`${Math.round(rect.left)}px`;
-    frame.style.top=`${Math.round(rect.top)}px`;
-    frame.style.transform='none';
-    frame.style.zIndex='2147483646';
+    frame.style.setProperty('left',`${Math.round(rect.left)}px`,'important');
+    frame.style.setProperty('top',`${Math.round(rect.top)}px`,'important');
+    frame.style.setProperty('right','auto','important');
+    frame.style.setProperty('bottom','auto','important');
+    frame.style.setProperty('transform','none','important');
+    frame.style.setProperty('z-index','2147483646','important');
     frameDrag={
       startX:Number(e.screenX)||0,
       startY:Number(e.screenY)||0,
@@ -365,11 +364,13 @@ function bindFrameDrag(root){
       const dy=(Number(ev.screenY)||0)-frameDrag.startY;
       const left=clamp(frameDrag.left+dx,pad,maxLeft);
       const top=clamp(frameDrag.top+dy,pad,maxTop);
-      frame.style.left=`${Math.round(left)}px`;
-      frame.style.top=`${Math.round(top)}px`;
+      frame.style.setProperty('left',`${Math.round(left)}px`,'important');
+      frame.style.setProperty('top',`${Math.round(top)}px`,'important');
     };
     layer.addEventListener('pointermove',move,{passive:true});
+    layer.addEventListener('mousemove',move,{passive:true});
     layer.addEventListener('pointerup',stop,{once:true});
+    layer.addEventListener('mouseup',stop,{once:true});
     layer.addEventListener('pointercancel',stop,{once:true});
     (MM_DOC.body||MM_DOC.documentElement).appendChild(layer);
     root.classList.add('mm-window-dragging');
@@ -450,14 +451,14 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.4.1'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.0'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
 }
 function bindDocument(){
   try{
-    const key='__muchiMapBridgeV241';
+    const key='__muchiMapBridgeV242';
     if(MM_DOC[key])return;MM_DOC[key]=true;
     MM_DOC.addEventListener('click',e=>{
       const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
@@ -473,4 +474,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.4.1';
+export const VERSION='2.5.0';
