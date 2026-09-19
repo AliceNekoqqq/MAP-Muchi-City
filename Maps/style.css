@@ -1,11 +1,9 @@
-/* 暮迟市地图 v2.5.0 · compact map terminal + floating detail card + draggable PC window */
-:root{color-scheme:dark}
-html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
-body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+/* 暮迟市地图 v2.5.1 · direct host overlay + floating detail card + MR-87-style draggable PC window */
 .mm-root,.mm-root *{box-sizing:border-box}
 .mm-root{
-  --head-h:54px;
-  position:absolute!important;inset:0!important;z-index:1!important;
+  --head-h:54px;color-scheme:dark;
+  position:fixed!important;z-index:2147483647!important;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
   display:none;align-items:stretch;justify-content:stretch;
   padding:0;color:#e9eeee;background:transparent;line-height:normal!important;text-align:left!important;
   pointer-events:auto!important;
@@ -41,9 +39,7 @@ body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
 @media(max-width:1120px) and (min-width:901px){.mm-title b{font-size:16px}.mm-title span{font-size:6px}.mm-location{min-width:86px}.mm-controls .mm-text-btn span{display:none}.mm-controls .mm-text-btn{min-width:32px;padding:0;justify-content:center}.mm-detail{width:min(292px,38%)}}
 /* Tablet / phone: map and detail become one natural vertical document. */
 
-/* Tablet / phone is selected from the Tavern host width, not from this iframe's own width.
- * This matters because the compact PC iframe can itself be narrower than 900px. */
-html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;background:#050809!important}
+/* Tablet / phone mode is selected from the Tavern host width. */
 .mm-root.mm-mobile{position:fixed!important;display:none;align-items:stretch;justify-content:flex-start;padding:0;background:#050809;backdrop-filter:none;-webkit-backdrop-filter:none;overflow-y:auto!important;overflow-x:hidden!important}
 .mm-root.mm-mobile.open{display:block!important}
 .mm-root.mm-mobile .mm-shell{position:relative;width:100%!important;max-width:none!important;min-height:100%;height:auto!important;max-height:none!important;border:0;border-radius:0;box-shadow:none;overflow:visible;background:#050809}
@@ -68,7 +64,7 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 @media(max-height:650px){.mm-root:not(.mm-mobile) .mm-title b{font-size:16px}.mm-root:not(.mm-mobile) .mm-photo{height:96px}.mm-root:not(.mm-mobile) .mm-card-body{padding:10px 12px 12px}.mm-root:not(.mm-mobile) .mm-desc{font-size:8px}.mm-root:not(.mm-mobile) .mm-sub{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){.mm-hotspot::before,.mm-hotspot::after,.mm-controls button,.mm-detail{transition:none}}
 
-/* v2.5.0 · player-visible intelligence layer */
+/* v2.5.1 · player-visible intelligence layer */
 .mm-card-badges{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap}.mm-intel-badge{display:inline-flex;align-items:center;min-height:20px;padding:2px 7px;border:1px solid rgba(154,184,187,.14);border-radius:999px;background:rgba(255,255,255,.025);color:#84979a;font-size:7px;letter-spacing:.08em}.mm-intel-badge.confirmed{border-color:rgba(111,174,158,.24);color:#9dc6b8;background:rgba(80,143,126,.08)}.mm-intel-badge.rumor{border-color:rgba(184,157,103,.24);color:#c7b27e;background:rgba(154,123,60,.07)}.mm-intel-badge.stale{border-color:rgba(161,126,134,.22);color:#b99ca4;background:rgba(134,83,95,.07)}.mm-intel-badge.unknown{color:#6d7b7e}
 .mm-metric.is-unknown{display:grid;grid-template-columns:1fr auto;gap:3px 8px;align-items:center}.mm-metric.is-unknown>b{color:#66777a}.mm-metric.is-unknown>small{grid-column:1/-1;color:#58676a;font-size:7px;line-height:1.5}.mm-trend{display:block;margin-top:4px;font-size:7px!important;font-weight:400!important;letter-spacing:0!important}.mm-trend.up{color:#b98b93}.mm-trend.down{color:#80a99f}.mm-trend.flat{color:#7f9294}
 .mm-intel-empty{margin-top:12px;padding:10px 11px;border:1px dashed rgba(154,184,187,.12);border-radius:9px;background:rgba(255,255,255,.018);color:#6a7c7f;font-size:8px;line-height:1.65}.mm-intel-summary{margin-top:12px;padding:10px 11px;border:1px solid rgba(154,184,187,.10);border-radius:9px;background:rgba(255,255,255,.018)}.mm-intel-summary p{margin:0 0 8px!important;color:#9aa9a9!important;font-size:8px!important;line-height:1.65!important}.mm-intel-summary>div{display:grid;grid-template-columns:44px 1fr;gap:8px;margin-top:4px;font-size:7px}.mm-intel-summary span{color:#5e6e71}.mm-intel-summary b{color:#899b9d;font-weight:500}

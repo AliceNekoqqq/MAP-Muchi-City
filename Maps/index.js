@@ -1,8 +1,8 @@
-/* 暮迟市地图 v2.5.0
+/* 暮迟市地图 v2.5.1
  * 01-11 是唯一交互对象。
- * v2.5.0: 地图动态层改读 /地图/区域情报。真实地点动态与玩家可见情报分层，初始全部未知；MR-87 日结算逐步揭示资源、尸群与通行信息，并显示来源、置信度、趋势与过期状态。
- * 保留 v2.4.2 的 PC 标题栏拖动修复。手机端不启用窗口拖动。
- * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
+ * v2.5.1: 地图窗口不再放进 iframe，直接挂载到酒馆主页面；PC 标题栏拖动与 MR-87 设置窗使用同类 pointer capture 机制。
+ * v2.5.0 的玩家可见区域情报层完整保留。手机端仍不启用窗口拖动。
+ * 酒馆助手脚本只负责 import 远程模块与绑定按钮，地图实现全部留在仓库。
  */
 function resolveTavernDocument(){
   /* Tavern Helper 官方脚本模型：脚本运行在后台 iframe，window.$ 被桥接到酒馆主页面。
@@ -25,10 +25,9 @@ const MM_BASES=[
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const FRAME_ID='muchi-map-frame-v250';
-const ROOT_ID='muchi-map-v250';
-const DRAG_LAYER_ID='muchi-map-drag-layer-v250';
-const OLD_IDS=['muchi-map-frame-v242','muchi-map-v242','muchi-map-frame-v241','muchi-map-v241','muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
+const ROOT_ID='muchi-map-v251';
+const STYLE_ID='muchi-map-style-v251';
+const OLD_IDS=['muchi-map-frame-v250','muchi-map-v250','muchi-map-drag-layer-v250','muchi-map-frame-v242','muchi-map-v242','muchi-map-frame-v241','muchi-map-v241','muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -40,10 +39,10 @@ let zoom=1;
 let minZoom=.18;
 let maxZoom=2.6;
 let drag=null;
-let frameDrag=null;
 let bound=false;
 let opening=null;
 let hostResizeHandler=null;
+let keyHandler=null;
 
 function enc(path){return path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/')}
 function asset(path,base=0){return MM_BASES[Math.min(base,MM_BASES.length-1)]+enc(path)}
@@ -51,7 +50,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.5.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.5.1`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -76,28 +75,22 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.5.0]',text);
+  console.error('[暮迟地图 v2.5.1]',text);
 }
 
 function cleanupStale(){
   drag=null;
-  frameDrag=null;
   if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{} hostResizeHandler=null;}
-  try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}
-  try{MM_DOC.getElementById(FRAME_ID)?.remove()}catch{}
+  if(keyHandler){try{MM_DOC.removeEventListener('keydown',keyHandler,true)}catch{} keyHandler=null;}
+  try{MM_DOC.getElementById(ROOT_ID)?.remove()}catch{}
+  try{MM_DOC.getElementById(STYLE_ID)?.remove()}catch{}
   for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
-  try{MM_DOC.querySelectorAll('[id^="muchi-map-host-v"],[id^="muchi-map-frame-v"]').forEach(el=>{if(el.id!==FRAME_ID)el.remove()})}catch{}
+  try{MM_DOC.querySelectorAll('[id^="muchi-map-host-v"],[id^="muchi-map-frame-v"]').forEach(el=>el.remove())}catch{}
 }
-function getFrame(){return MM_DOC.getElementById(FRAME_ID)}
-function getFrameDoc(){try{return getFrame()?.contentDocument||null}catch{return null}}
-function getRoot(){return getFrameDoc()?.getElementById(ROOT_ID)||null}
+function getRoot(){return MM_DOC.getElementById(ROOT_ID)}
 function syncDisplayMode(root){
   if(!root)return;
-  const mobile=hostViewport().w<=900;
-  root.classList.toggle('mm-mobile',mobile);
-  const doc=root.ownerDocument;
-  doc?.documentElement?.classList.toggle('mm-mobile-doc',mobile);
-  doc?.body?.classList.toggle('mm-mobile-doc',mobile);
+  root.classList.toggle('mm-mobile',hostViewport().w<=900);
 }
 async function prepareResources(){
   if(mapData&&cssText)return;
@@ -160,40 +153,46 @@ function desktopFrameSize(){
   const height=Math.round(width/1.5+head);
   return {width:Math.round(width),height,head};
 }
-function applyFrameLayout(frame){
-  if(!frame)return;
-  const {w}=hostViewport();
+function applyRootLayout(root,preservePosition=false){
+  if(!root)return;
+  const {w,h}=hostViewport();
   if(w<=900){
-    frame.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;border:0!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;';
+    root.dataset.userMoved='0';
+    root.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;transform:none!important;border:0!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;';
     return;
   }
-  const size=desktopFrameSize();
-  frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${size.width}px!important;height:${size.height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:18px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 72px rgba(0,0,0,.34),0 0 0 1px rgba(174,202,204,.05)!important;`;
+  const size=desktopFrameSize(),pad=8;
+  let left=Math.round((w-size.width)/2),top=Math.round((h-size.height)/2);
+  if(preservePosition&&root.dataset.userMoved==='1'){
+    const rect=root.getBoundingClientRect();
+    left=Math.round(clamp(rect.left,pad,Math.max(pad,w-size.width-pad)));
+    top=Math.round(clamp(rect.top,pad,Math.max(pad,h-size.height-pad)));
+  }
+  root.style.cssText=`position:fixed!important;left:${left}px!important;top:${top}px!important;right:auto!important;bottom:auto!important;width:${size.width}px!important;height:${size.height}px!important;transform:none!important;border:0!important;border-radius:18px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 72px rgba(0,0,0,.34),0 0 0 1px rgba(174,202,204,.05)!important;`;
+}
+function ensureStyle(){
+  let style=MM_DOC.getElementById(STYLE_ID);
+  if(!style){style=MM_DOC.createElement('style');style.id=STYLE_ID;(MM_DOC.head||MM_DOC.documentElement).appendChild(style)}
+  if(style.textContent!==cssText)style.textContent=cssText;
+  return style;
 }
 function mount(){
   cleanupStale();
   if(!cssText)throw Error('地图样式尚未准备完成');
-  const frame=MM_DOC.createElement('iframe');
-  frame.id=FRAME_ID;
-  frame.setAttribute('frameborder','0');
-  frame.setAttribute('title','暮迟市地图');
-  applyFrameLayout(frame);
-  (MM_DOC.body||MM_DOC.documentElement).appendChild(frame);
-  const doc=frame.contentDocument;
-  if(!doc)throw Error('地图 iframe 无法访问');
-  doc.open();
-  const mobileDoc=hostViewport().w<=900;
-  doc.write(`<!doctype html><html class="${mobileDoc?'mm-mobile-doc':''}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:transparent!important}body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}</style><style>${cssText}</style></head><body class="${mobileDoc?'mm-mobile-doc':''}">${shellHtml()}</body></html>`);
-  doc.close();
-  const root=doc.getElementById(ROOT_ID);
+  ensureStyle();
+  const holder=MM_DOC.createElement('div');holder.innerHTML=shellHtml().trim();
+  const root=holder.firstElementChild;
   if(!root)throw Error('地图界面创建失败');
+  applyRootLayout(root,false);
+  (MM_DOC.body||MM_DOC.documentElement).appendChild(root);
   syncDisplayMode(root);
   bindRoot(root);
-  doc.addEventListener('keydown',e=>{if(e.key==='Escape')closeMap()});
+  keyHandler=e=>{if(e.key==='Escape'&&getRoot()===root)closeMap()};
+  MM_DOC.addEventListener('keydown',keyHandler,true);
   hostResizeHandler=()=>{
-    const live=getFrame();if(live!==frame)return;
-    applyFrameLayout(frame);
-    setTimeout(()=>{const r=getRoot();if(r){syncDisplayMode(r);layoutDesktop(r);fit(r)}},30);
+    const live=getRoot();if(live!==root)return;
+    applyRootLayout(root,true);syncDisplayMode(root);layoutDesktop(root);
+    setTimeout(()=>{if(getRoot()===root)fit(root)},30);
   };
   try{MM_HOST.addEventListener?.('resize',hostResizeHandler,{passive:true})}catch{}
   return root;
@@ -315,67 +314,37 @@ function selectRegion(root,id,center=false){
 
 
 function bindFrameDrag(root){
-  const frame=getFrame();
   const head=root?.querySelector?.('.mm-head');
-  if(!frame||!head)return;
-  const clearLayer=()=>{try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}};
-  const stop=()=>{
-    clearLayer();
-    try{frame.style.setProperty('z-index','2147483647','important')}catch{}
-    frameDrag=null;
-    root.classList.remove('mm-window-dragging');
+  if(!root||!head||head.dataset.dragBound==='1')return;
+  head.dataset.dragBound='1';
+  let d=null;
+  const stop=e=>{
+    if(!d)return;
+    try{if(e?.pointerId!=null&&head.hasPointerCapture?.(e.pointerId))head.releasePointerCapture(e.pointerId)}catch{}
+    d=null;root.classList.remove('mm-window-dragging');
   };
   head.addEventListener('pointerdown',e=>{
-    if(hostViewport().w<=900)return;
-    if(e.pointerType&&e.pointerType!=='mouse')return;
-    if(e.button!==0)return;
+    if(hostViewport().w<=900||e.button!==0)return;
     if(e.target?.closest?.('.mm-controls,button,a,input,select,textarea,[data-no-window-drag]'))return;
-    const rect=frame.getBoundingClientRect();
-    /* 把居中的 transform 定位固化为像素坐标，之后只移动 iframe 本身。 */
-    frame.style.setProperty('left',`${Math.round(rect.left)}px`,'important');
-    frame.style.setProperty('top',`${Math.round(rect.top)}px`,'important');
-    frame.style.setProperty('right','auto','important');
-    frame.style.setProperty('bottom','auto','important');
-    frame.style.setProperty('transform','none','important');
-    frame.style.setProperty('z-index','2147483646','important');
-    frameDrag={
-      startX:Number(e.screenX)||0,
-      startY:Number(e.screenY)||0,
-      left:rect.left,
-      top:rect.top,
-      width:rect.width,
-      height:rect.height
-    };
-    clearLayer();
-    /* iframe 自己移动时可能从鼠标下方移走，导致 iframe 内丢失 pointermove。
-     * 因此拖动期间在酒馆主页面临时放一个完全透明的捕获层，mouseup 后立即删除。 */
-    const layer=MM_DOC.createElement('div');
-    layer.id=DRAG_LAYER_ID;
-    layer.setAttribute('aria-hidden','true');
-    layer.style.cssText='position:fixed!important;inset:0!important;z-index:2147483647!important;background:transparent!important;cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important;touch-action:none!important;pointer-events:auto!important;';
-    const move=ev=>{
-      if(!frameDrag)return;
-      if(Number.isFinite(ev.buttons)&&ev.buttons===0){stop();return}
-      const {w,h}=hostViewport();
-      const pad=8;
-      const maxLeft=Math.max(pad,w-frameDrag.width-pad);
-      const maxTop=Math.max(pad,h-frameDrag.height-pad);
-      const dx=(Number(ev.screenX)||0)-frameDrag.startX;
-      const dy=(Number(ev.screenY)||0)-frameDrag.startY;
-      const left=clamp(frameDrag.left+dx,pad,maxLeft);
-      const top=clamp(frameDrag.top+dy,pad,maxTop);
-      frame.style.setProperty('left',`${Math.round(left)}px`,'important');
-      frame.style.setProperty('top',`${Math.round(top)}px`,'important');
-    };
-    layer.addEventListener('pointermove',move,{passive:true});
-    layer.addEventListener('mousemove',move,{passive:true});
-    layer.addEventListener('pointerup',stop,{once:true});
-    layer.addEventListener('mouseup',stop,{once:true});
-    layer.addEventListener('pointercancel',stop,{once:true});
-    (MM_DOC.body||MM_DOC.documentElement).appendChild(layer);
-    root.classList.add('mm-window-dragging');
-    e.preventDefault();
+    const rect=root.getBoundingClientRect();
+    root.style.setProperty('position','fixed','important');
+    root.style.setProperty('left',`${Math.round(rect.left)}px`,'important');
+    root.style.setProperty('top',`${Math.round(rect.top)}px`,'important');
+    root.style.setProperty('right','auto','important');root.style.setProperty('bottom','auto','important');
+    root.style.setProperty('transform','none','important');root.style.setProperty('margin','0','important');
+    root.dataset.userMoved='1';
+    d={id:e.pointerId,x:e.clientX,y:e.clientY,left:rect.left,top:rect.top,width:rect.width,height:rect.height};
+    try{head.setPointerCapture?.(e.pointerId)}catch{}
+    root.classList.add('mm-window-dragging');e.preventDefault();
   });
+  head.addEventListener('pointermove',e=>{
+    if(!d||e.pointerId!==d.id)return;
+    const {w,h}=hostViewport(),pad=8,maxLeft=Math.max(pad,w-d.width-pad),maxTop=Math.max(pad,h-d.height-pad);
+    root.style.setProperty('left',`${Math.round(clamp(d.left+e.clientX-d.x,pad,maxLeft))}px`,'important');
+    root.style.setProperty('top',`${Math.round(clamp(d.top+e.clientY-d.y,pad,maxTop))}px`,'important');
+  });
+  head.addEventListener('pointerup',stop);head.addEventListener('pointercancel',stop);
+  head.addEventListener('lostpointercapture',()=>{d=null;root.classList.remove('mm-window-dragging')});
 }
 
 function bindRoot(root){
@@ -451,7 +420,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.0'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.1'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -470,8 +439,8 @@ function install(){
   installApi();bindDocument();
   if(bound)return;bound=true;
   /* 脚本库按钮不在远程模块里注册：getButtonEvent 是脚本专属 API，
-   * v25.8 角色卡脚本本体会按官方文档完成按钮绑定。 */
+   * 角色卡脚本本体只负责 import 与按钮绑定。 */
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.5.0';
+export const VERSION='2.5.1';
