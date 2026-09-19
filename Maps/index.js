@@ -1,6 +1,6 @@
-/* 暮迟市地图 v2.4.0
+/* 暮迟市地图 v2.4.1
  * 01-11 是唯一交互对象。
- * v2.4.0: PC 改为窄幅地图主窗 + 地图内浮动详情卡；详情不再占据独立右栏。手机端保持既有纵向布局。
+ * v2.4.1: 在 v2.4.0 紧凑浮卡基础上，为 PC 悬浮地图窗口增加标题栏拖动；手机端不启用窗口拖动。
  * 任一步骤失败都会完整回滚，不允许留下阻塞页面的透明层。
  */
 function resolveTavernDocument(){
@@ -24,9 +24,10 @@ const MM_BASES=[
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
 ].filter((v,i,a)=>a.indexOf(v)===i);
 
-const FRAME_ID='muchi-map-frame-v240';
-const ROOT_ID='muchi-map-v240';
-const OLD_IDS=['muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
+const FRAME_ID='muchi-map-frame-v241';
+const ROOT_ID='muchi-map-v241';
+const DRAG_LAYER_ID='muchi-map-drag-layer-v241';
+const OLD_IDS=['muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
@@ -38,6 +39,7 @@ let zoom=1;
 let minZoom=.18;
 let maxZoom=2.6;
 let drag=null;
+let frameDrag=null;
 let bound=false;
 let opening=null;
 let hostResizeHandler=null;
@@ -48,7 +50,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.4.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.4.1`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -73,12 +75,14 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.4.0]',text);
+  console.error('[暮迟地图 v2.4.1]',text);
 }
 
 function cleanupStale(){
   drag=null;
+  frameDrag=null;
   if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{} hostResizeHandler=null;}
+  try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}
   try{MM_DOC.getElementById(FRAME_ID)?.remove()}catch{}
   for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
   try{MM_DOC.querySelectorAll('[id^="muchi-map-host-v"],[id^="muchi-map-frame-v"]').forEach(el=>{if(el.id!==FRAME_ID)el.remove()})}catch{}
@@ -106,7 +110,8 @@ async function prepareResources(){
 
 function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${ROOT_ID}" class="mm-root open${mobile?' mm-mobile':''}" role="dialog" aria-modal="true" aria-label="暮迟市地图">
   <div class="mm-shell">
-    <header class="mm-head">
+    <header class="mm-head" title="拖动窗口">
+      <i class="mm-drag-grip" aria-hidden="true"></i>
       <div class="mm-title"><b>暮迟市地图</b><span>MU CHI CITY · 01—11 区域索引</span></div>
       <div class="mm-location"><span>当前地点</span><b data-ui="current-name">读取中…</b></div>
       <div class="mm-controls" aria-label="地图控制">
@@ -311,7 +316,69 @@ function selectRegion(root,id,center=false){
   root.classList.add('mm-has-detail');
 }
 
+
+function bindFrameDrag(root){
+  const frame=getFrame();
+  const head=root?.querySelector?.('.mm-head');
+  if(!frame||!head)return;
+  const clearLayer=()=>{try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}};
+  const stop=()=>{
+    clearLayer();
+    try{frame.style.zIndex='2147483647'}catch{}
+    frameDrag=null;
+    root.classList.remove('mm-window-dragging');
+  };
+  head.addEventListener('pointerdown',e=>{
+    if(hostViewport().w<=900)return;
+    if(e.pointerType&&e.pointerType!=='mouse')return;
+    if(e.button!==0)return;
+    if(e.target?.closest?.('.mm-controls,button,a,input,select,textarea,[data-no-window-drag]'))return;
+    const rect=frame.getBoundingClientRect();
+    /* 把居中的 transform 定位固化为像素坐标，之后只移动 iframe 本身。 */
+    frame.style.left=`${Math.round(rect.left)}px`;
+    frame.style.top=`${Math.round(rect.top)}px`;
+    frame.style.transform='none';
+    frame.style.zIndex='2147483646';
+    frameDrag={
+      startX:Number(e.screenX)||0,
+      startY:Number(e.screenY)||0,
+      left:rect.left,
+      top:rect.top,
+      width:rect.width,
+      height:rect.height
+    };
+    clearLayer();
+    /* iframe 自己移动时可能从鼠标下方移走，导致 iframe 内丢失 pointermove。
+     * 因此拖动期间在酒馆主页面临时放一个完全透明的捕获层，mouseup 后立即删除。 */
+    const layer=MM_DOC.createElement('div');
+    layer.id=DRAG_LAYER_ID;
+    layer.setAttribute('aria-hidden','true');
+    layer.style.cssText='position:fixed!important;inset:0!important;z-index:2147483647!important;background:transparent!important;cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important;touch-action:none!important;pointer-events:auto!important;';
+    const move=ev=>{
+      if(!frameDrag)return;
+      if(Number.isFinite(ev.buttons)&&ev.buttons===0){stop();return}
+      const {w,h}=hostViewport();
+      const pad=8;
+      const maxLeft=Math.max(pad,w-frameDrag.width-pad);
+      const maxTop=Math.max(pad,h-frameDrag.height-pad);
+      const dx=(Number(ev.screenX)||0)-frameDrag.startX;
+      const dy=(Number(ev.screenY)||0)-frameDrag.startY;
+      const left=clamp(frameDrag.left+dx,pad,maxLeft);
+      const top=clamp(frameDrag.top+dy,pad,maxTop);
+      frame.style.left=`${Math.round(left)}px`;
+      frame.style.top=`${Math.round(top)}px`;
+    };
+    layer.addEventListener('pointermove',move,{passive:true});
+    layer.addEventListener('pointerup',stop,{once:true});
+    layer.addEventListener('pointercancel',stop,{once:true});
+    (MM_DOC.body||MM_DOC.documentElement).appendChild(layer);
+    root.classList.add('mm-window-dragging');
+    e.preventDefault();
+  });
+}
+
 function bindRoot(root){
+  bindFrameDrag(root);
   root.addEventListener('click',e=>{
     if(e.target===root){closeMap();return}
     const spot=e.target.closest?.('[data-region]');if(spot){e.preventDefault();e.stopPropagation();selectRegion(root,spot.dataset.region,false);return}
@@ -383,14 +450,14 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.4.0'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.4.1'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
 }
 function bindDocument(){
   try{
-    const key='__muchiMapBridgeV240';
+    const key='__muchiMapBridgeV241';
     if(MM_DOC[key])return;MM_DOC[key]=true;
     MM_DOC.addEventListener('click',e=>{
       const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
@@ -406,4 +473,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.4.0';
+export const VERSION='2.4.1';
