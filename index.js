@@ -1,206 +1,487 @@
-function resolveHostWindow(){
-  let w=window,best=window;
-  for(let i=0;i<8;i++){
-    try{
-      if(w?.document?.body)best=w;
-      if(!w.parent||w.parent===w)break;
-      void w.parent.document;
-      w=w.parent;
-    }catch(_){break}
-  }
-  return best;
+/* 暮迟市地图 v2.5.5
+ * 01-11 是唯一交互对象。
+ * v2.5.5: 手机端改为留边小窗，使用 visualViewport 计算实际可视高度，并补足底部安全区，避免详情尾部被浏览器工具栏遮挡；
+ * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
+ * 医疗区前端名称修正为“河西南部医疗区”，通过 intelKey 继续读取 MR-87 旧键“河东医疗区”。
+ * 标题栏改用 pointer capture，手机端不启用窗口拖动。
+ * 任一步骤失败都会完整回滚。
+ */
+function resolveTavernDocument(){
+  /* Tavern Helper 官方脚本模型：脚本运行在后台 iframe，window.$ 被桥接到酒馆主页面。
+   * 因此以 $(\'body\')[0].ownerDocument 作为唯一宿主来源，不再向 top 逐层猜测。 */
+  try{
+    const jq=globalThis.$;
+    const body=jq?.('body')?.[0];
+    if(body?.ownerDocument)return body.ownerDocument;
+  }catch(_){}
+  try{if(window.parent?.document?.body)return window.parent.document}catch(_){}
+  return document;
 }
-const MM_MODULE_BASE = new URL('../', import.meta.url).href;
-const MM_BASES = [
+
+const MM_DOC=resolveTavernDocument();
+const MM_HOST=MM_DOC.defaultView||window.parent||window;
+const MM_MODULE_BASE=new URL('../',import.meta.url).href;
+const MM_BASES=[
   MM_MODULE_BASE,
+  MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','testingcf.jsdelivr.net'):MM_MODULE_BASE,
   MM_MODULE_BASE.includes('cdn.jsdelivr.net')?MM_MODULE_BASE.replace('cdn.jsdelivr.net','fastly.jsdelivr.net'):MM_MODULE_BASE
-];
-const MM_STYLE_ID = 'muchi-map-style-v104';
-const MM_CRITICAL_STYLE_ID = 'muchi-map-critical-v104';
-const MM_HOST_ID = 'muchi-map-host-v104';
-const MM_ROOT_ID = 'muchi-map-overlay';
-const MM_HOST = resolveHostWindow();
-const MM_DOC = MM_HOST.document;
+].filter((v,i,a)=>a.indexOf(v)===i);
+
+const FRAME_ID='muchi-map-frame-v250';
+const ROOT_ID='muchi-map-v250';
+const DRAG_LAYER_ID='muchi-map-drag-layer-v250';
+const OLD_IDS=['muchi-map-frame-v242','muchi-map-v242','muchi-map-frame-v241','muchi-map-v241','muchi-map-frame-v240','muchi-map-v240','muchi-map-frame-v232','muchi-map-v232','muchi-map-frame-v231','muchi-map-v231','muchi-map-frame-v230','muchi-map-v230','muchi-map-frame-v220','muchi-map-v220','muchi-map-frame-v210','muchi-map-v210','muchi-map-host-v200','muchi-map-v200','muchi-map-host-v104','muchi-map-root-v104'];
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,Number(n)||0));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-let mmData=null, mmStat=null, mmSelected='', mmShowLocations=true, mmShowDistricts=false, mmShowRoutes=true;
-let view={scale:1,x:0,y:0,minScale:.2,maxScale:3.6,touched:false};
-let pointers=new Map(), dragStart=null, pinchStart=null;
 
-function hostCss(){return 'position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:2147483646!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:none!important;contain:none!important;isolation:isolate!important'}
-function getMapHost(){return MM_DOC.getElementById(MM_HOST_ID)}
-function getShadow(){return getMapHost()?.shadowRoot||null}
-function getMapRoot(){return getShadow()?.getElementById(MM_ROOT_ID)||null}
-function ensureHost(){
-  let host=getMapHost();
-  if(host&&host.shadowRoot)return host;
-  try{host?.remove()}catch{}
-  host=MM_DOC.createElement('div');host.id=MM_HOST_ID;host.style.cssText=hostCss();
-  (MM_DOC.body||MM_DOC.documentElement).appendChild(host);
-  host.attachShadow({mode:'open'});
-  return host;
-}
-function installCriticalStyle(){
-  const host=ensureHost(),shadow=host.shadowRoot;if(shadow.getElementById(MM_CRITICAL_STYLE_ID))return;
-  const style=MM_DOC.createElement('style');style.id=MM_CRITICAL_STYLE_ID;
-  style.textContent=`:host{all:initial}#${MM_ROOT_ID}{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:1!important;display:none;background:rgba(5,8,10,.94);color:#edf3f2;font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;visibility:visible!important;opacity:1!important;pointer-events:auto!important}#${MM_ROOT_ID}.mm-open{display:block!important}#${MM_ROOT_ID} *{box-sizing:border-box}#${MM_ROOT_ID} .mm-shell{position:absolute;top:8px;right:8px;bottom:8px;left:8px;overflow:hidden;border:1px solid rgba(194,216,219,.22);border-radius:18px;background:#0b1012}#${MM_ROOT_ID} .mm-head{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:1px solid rgba(188,209,212,.16)}#${MM_ROOT_ID} .mm-title{flex:1}#${MM_ROOT_ID} .mm-title b{display:block;font-size:17px}#${MM_ROOT_ID} .mm-title span,#${MM_ROOT_ID} .mm-current{font-size:9px;color:#91a0a3}#${MM_ROOT_ID} .mm-head-actions{margin-left:auto;display:flex;gap:6px}#${MM_ROOT_ID} button{min-height:36px;border:1px solid rgba(188,209,212,.18);border-radius:9px;background:#12191c;color:#dce7e7}#${MM_ROOT_ID} .mm-body{position:absolute;top:61px;right:0;bottom:0;left:0;display:grid;grid-template-columns:minmax(0,1fr) 320px}#${MM_ROOT_ID} .mm-main{position:relative;min-width:0;min-height:0}#${MM_ROOT_ID} .mm-side{overflow:auto;border-left:1px solid rgba(188,209,212,.16);background:#101619}#${MM_ROOT_ID} .mm-side-empty{display:flex;min-height:100%;align-items:center;justify-content:center;padding:24px;text-align:center;font-size:11px;line-height:1.8;color:#91a0a3}@media(max-width:900px){#${MM_ROOT_ID} .mm-shell{top:0;right:0;bottom:0;left:0;border:0;border-radius:0}#${MM_ROOT_ID} .mm-current{display:none}#${MM_ROOT_ID} .mm-body{grid-template-columns:1fr}#${MM_ROOT_ID} .mm-side{position:absolute;left:8px;right:8px;bottom:8px;max-height:42%;border:1px solid rgba(188,209,212,.16);border-radius:14px}}`;
-  shadow.appendChild(style);
-}
+let mapData=null;
+let cssText='';
+let statData={};
+let selectedId='';
+let zoom=1;
+let minZoom=.18;
+let maxZoom=2.6;
+let drag=null;
+let frameDrag=null;
+let bound=false;
+let opening=null;
+let hostResizeHandler=null;
 
-function cacheBust(url){return `${url}${url.includes('?')?'&':'?'}t=${Date.now()}`}
 function enc(path){return path.split('/').map(encodeURIComponent).join('/').replace(/%2F/g,'/')}
-function asset(path,base=0){return cacheBust(MM_BASES[base]+enc(path))}
-async function textNoCache(path){let last;for(let i=0;i<MM_BASES.length;i++){try{const r=await fetch(asset(path,i),{cache:'no-store'});if(!r.ok)throw new Error(`${path}: ${r.status}`);return await r.text()}catch(e){last=e;console.warn('[暮迟地图] 资源源失败',MM_BASES[i],e)}}throw last||new Error(`${path}: 加载失败`)}
-async function jsonNoCache(path){return JSON.parse(await textNoCache(path))}
+function asset(path,base=0){return MM_BASES[Math.min(base,MM_BASES.length-1)]+enc(path)}
+async function loadText(path){
+  let last;
+  for(let i=0;i<MM_BASES.length;i++){
+    try{
+      const r=await fetch(`${asset(path,i)}?v=2.5.5`,{cache:'no-store'});
+      if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
+      return await r.text();
+    }catch(e){last=e}
+  }
+  throw last||Error(`${path}: 加载失败`);
+}
+async function loadJson(path){return JSON.parse(await loadText(path))}
+async function readStat(){
+  const normalize=v=>v?.stat_data&&typeof v.stat_data==='object'?v.stat_data:(v&&typeof v==='object'?v:{});
+  const mergedReaders=[globalThis.getAllVariables,MM_HOST?.getAllVariables].filter(fn=>typeof fn==='function');
+  for(const fn of mergedReaders){
+    try{const v=normalize(fn());if(Object.keys(v).length)return v}catch(_){}
+  }
+  const scopedReaders=[globalThis.getVariables,MM_HOST?.getVariables].filter(fn=>typeof fn==='function');
+  for(const fn of scopedReaders){
+    for(const option of [{type:'message',message_id:-1},{type:'chat'}]){
+      try{const v=normalize(fn(option));if(Object.keys(v).length)return v}catch(_){}
+    }
+  }
+  return {};
+}
+function notifyError(message){
+  const text=`暮迟地图打开失败：${message}`;
+  try{MM_HOST.toastr?.error?.(text)}catch{}
+  console.error('[暮迟地图 v2.5.5]',text);
+}
 
-async function loadStyle(force=false){
-  installCriticalStyle();const shadow=getShadow();let style=shadow?.getElementById(MM_STYLE_ID);
-  if(style&&!force)return;
-  try{
-    const css=await textNoCache('Maps/style.css');
-    if(!style){style=MM_DOC.createElement('style');style.id=MM_STYLE_ID;shadow.appendChild(style)}
-    style.textContent=css;
-  }catch(e){console.error('[暮迟地图] CSS加载失败',e);throw e}
+function cleanupStale(){
+  drag=null;
+  frameDrag=null;
+  if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{} hostResizeHandler=null;}
+  try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}
+  try{MM_DOC.getElementById(FRAME_ID)?.remove()}catch{}
+  for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
+  try{MM_DOC.querySelectorAll('[id^="muchi-map-host-v"],[id^="muchi-map-frame-v"]').forEach(el=>{if(el.id!==FRAME_ID)el.remove()})}catch{}
 }
-async function loadData(){
-  try{mmData=await jsonNoCache('Maps/map-data.json')}catch(e){console.error('[暮迟地图] 数据加载失败',e);throw e}
-  return mmData;
+function getFrame(){return MM_DOC.getElementById(FRAME_ID)}
+function getFrameDoc(){try{return getFrame()?.contentDocument||null}catch{return null}}
+function getRoot(){return getFrameDoc()?.getElementById(ROOT_ID)||null}
+function syncDisplayMode(root){
+  if(!root)return;
+  const mobile=hostViewport().w<=900;
+  root.classList.toggle('mm-mobile',mobile);
+  const doc=root.ownerDocument;
+  doc?.documentElement?.classList.toggle('mm-mobile-doc',mobile);
+  doc?.body?.classList.toggle('mm-mobile-doc',mobile);
 }
-async function getStat(){
-  try{const v=getAllVariables()||{};return v?.stat_data||v||{}}
-  catch(e){console.warn('[暮迟地图] 无法读取MVU',e);return {}}
+async function prepareResources(){
+  if(mapData&&cssText)return;
+  const [css,data]=await Promise.all([
+    cssText?Promise.resolve(cssText):loadText('Maps/style.css'),
+    mapData?Promise.resolve(mapData):loadJson('Maps/map-data.json')
+  ]);
+  cssText=css;
+  mapData=data;
 }
-function locState(name){return mmStat?.地图?.地点动态?.[name]||{}}
-function currentName(){return mmStat?.世界?.当前地点||'未知'}
-function byName(name){return mmData?.locations?.find(x=>x.name===name)||mmData?.districts?.find(x=>x.name===name)}
-function pct(n){return clamp(Number(n)||0,0,100)}
 
-function rootHtml(){return `<div class="mm-shell" role="dialog" aria-modal="true" aria-label="暮迟市地图">
-  <header class="mm-head">
-    <div class="mm-title"><b>暮迟市态势图</b><span>MU CHI CITY · EXTERNAL MAP TERMINAL</span></div>
-    <div class="mm-current"><small>当前定位</small><strong class="mm-current-name">读取中…</strong></div>
-    <div class="mm-head-actions"><button type="button" data-act="refresh" title="从GitHub重新读取地图资源">↻ 刷新资源</button><button class="mm-close" type="button" data-act="close" aria-label="关闭地图">×</button></div>
-  </header>
-  <div class="mm-body">
-    <main class="mm-main">
-      <div class="mm-toolbar">
-        <div class="mm-tool"><button type="button" data-act="zoom-in" aria-label="放大">＋</button><button type="button" data-act="zoom-out" aria-label="缩小">－</button><button type="button" data-act="reset" aria-label="适应窗口">⌂</button><button type="button" data-act="home">当前定位</button></div>
-        <div class="mm-search"><select aria-label="查找地点"></select><button type="button" data-act="search">查找</button></div>
-        <div class="mm-layers"><button type="button" data-layer="locations" class="active">探索地点</button><button type="button" data-layer="districts">城区分区</button><button type="button" data-layer="routes" class="active">路线</button></div>
+function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${ROOT_ID}" class="mm-root open${mobile?' mm-mobile':''}" role="dialog" aria-modal="true" aria-label="暮迟市地图">
+  <div class="mm-shell">
+    <header class="mm-head" title="拖动窗口">
+      <i class="mm-drag-grip" aria-hidden="true"></i>
+      <div class="mm-title"><b>暮迟市地图</b><span>MU CHI CITY · 01—11 区域索引</span></div>
+      <div class="mm-location"><span>当前地点</span><b data-ui="current-name">读取中…</b></div>
+      <div class="mm-controls" aria-label="地图控制">
+        <button type="button" data-act="zoom-out" aria-label="缩小">−</button>
+        <button class="mm-zoom-label" type="button" data-act="fit" title="适应窗口"><span data-ui="zoom">100%</span></button>
+        <button type="button" data-act="zoom-in" aria-label="放大">＋</button>
+        <button class="mm-text-btn" type="button" data-act="locate" aria-label="定位当前区域"><i>◎</i><span>定位</span></button>
+        <button class="mm-close" type="button" data-act="close" aria-label="关闭">×</button>
       </div>
-      <div class="mm-viewport">
-        <div class="mm-stage">
-          <img class="mm-map-image" alt="暮迟市地图" draggable="false">
-          <svg class="mm-routes" viewBox="0 0 1536 1024" preserveAspectRatio="none"></svg>
-          <div class="mm-marker-layer"></div><div class="mm-map-vignette"></div>
+    </header>
+    <div class="mm-content">
+      <main class="mm-map-area">
+        <div class="mm-hint">拖动 · 点击 01–11 查看区域</div>
+        <div class="mm-viewport" data-ui="viewport">
+          <div class="mm-stage" data-ui="stage">
+            <img class="mm-map" data-ui="map" alt="暮迟市城市地图" draggable="false">
+            <div class="mm-hotspots" data-ui="hotspots"></div>
+          </div>
         </div>
-      </div>
-    </main>
-    <aside class="mm-side"><div class="mm-side-empty">地图资源加载中…</div><div class="mm-detail"></div></aside>
+      </main>
+      <aside class="mm-detail" data-ui="detail">
+        <div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>
+      </aside>
+    </div>
   </div>
-</div>`}
+</section>`}
+
+function hostViewport(){
+  const de=MM_DOC.documentElement,body=MM_DOC.body,vv=MM_HOST?.visualViewport;
+  const visualW=Number(vv?.width)||0,visualH=Number(vv?.height)||0;
+  const w=Math.max(320,visualW||Number(MM_HOST?.innerWidth)||de?.clientWidth||body?.clientWidth||1280);
+  const h=Math.max(480,visualH||Number(MM_HOST?.innerHeight)||de?.clientHeight||body?.clientHeight||800);
+  return {w,h};
+}
+function desktopFrameSize(){
+  const {w:vw,h:vh}=hostViewport();
+  const head=vh<700?50:54;
+  /* PC 主窗只为地图服务，不再给右侧详情预留一整列。
+   * 宽度默认约 72vw，最大 980px；再根据可用高度反向收缩，避免横向霸屏。 */
+  const sideGap=vw<1180?44:72;
+  const maxW=Math.max(680,Math.min(980,vw-sideGap));
+  let width=clamp(Math.round(vw*.72),720,maxW);
+  const maxFrameH=Math.max(520,Math.min(720,Math.round(vh*.82),vh-48));
+  width=Math.min(width,Math.max(660,(maxFrameH-head)*1.5));
+  width=Math.min(width,maxW);
+  const height=Math.round(width/1.5+head);
+  return {width:Math.round(width),height,head};
+}
+function applyFrameLayout(frame){
+  if(!frame)return;
+  const {w,h}=hostViewport();
+  if(w<=900){
+    /* 手机不再使用 100vh 全屏：以 visualViewport 的真实可见区域计算，
+     * 上下主动留出约 5% 空隙，并让 iframe 自身裁切圆角。
+     * 这样 Safari/Chrome 底栏出现时，详情尾部仍可滚到可见区。 */
+    const side=Math.max(7,Math.min(12,Math.round(w*.025)));
+    const width=Math.max(304,Math.round(w-side*2));
+    const targetH=Math.round(h*.90);
+    const height=Math.max(430,Math.min(Math.round(h-18),targetH));
+    const radius=w<=430?14:16;
+    frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 18px 58px rgba(0,0,0,.48),0 0 0 1px rgba(174,202,204,.08)!important;`;
+    return;
+  }
+  const size=desktopFrameSize();
+  frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${size.width}px!important;height:${size.height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:18px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 72px rgba(0,0,0,.34),0 0 0 1px rgba(174,202,204,.05)!important;`;
+}
 function mount(){
-  installCriticalStyle();const host=ensureHost(),shadow=host.shadowRoot;
-  let root=getMapRoot();if(root)return root;
-  root=MM_DOC.createElement('div');root.id=MM_ROOT_ID;root.setAttribute('aria-hidden','true');root.innerHTML=rootHtml();shadow.appendChild(root);
-  bind(root);return root;
-}
-function populateSearch(root){
-  const sel=root.querySelector('.mm-search select');if(!sel)return;
-  sel.innerHTML=(mmData?.locations||[]).map(x=>`<option value="${esc(x.name)}">${esc(x.name)}</option>`).join('');
-}
-function renderRoutes(root){
-  const svg=root.querySelector('.mm-routes');if(!svg)return;svg.innerHTML='';svg.style.display=mmShowRoutes?'block':'none';
-  if(!mmShowRoutes)return;
-  const map=new Map((mmData?.locations||[]).map(x=>[x.name,x]));
-  for(const [a,b] of mmData?.routes||[]){const A=map.get(a),B=map.get(b);if(!A||!B)continue;const line=MM_DOC.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('x1',String(A.x*15.36));line.setAttribute('y1',String(A.y*10.24));line.setAttribute('x2',String(B.x*15.36));line.setAttribute('y2',String(B.y*10.24));line.classList.add('mm-route');line.dataset.a=a;line.dataset.b=b;if(mmSelected&&(a===mmSelected||b===mmSelected))line.classList.add('active');svg.appendChild(line)}
-}
-function markerButton(p,kind){
-  const b=MM_DOC.createElement('button');b.type='button';b.className='mm-marker '+(kind==='district'?'region ':'');b.dataset.name=p.name;b.style.left=`${p.x}%`;b.style.top=`${p.y}%`;b.innerHTML=`<span class="mm-pin">${esc(p.id.replace(/^L|^D/,''))}</span><span class="mm-name">${esc(p.name)}</span>`;
-  if(kind==='location'&&p.name===currentName())b.classList.add('current');if(p.name===mmSelected)b.classList.add('selected');
-  b.addEventListener('click',e=>{e.stopPropagation();selectPlace(p.name,true)});return b;
-}
-function renderMarkers(root){
-  const layer=root.querySelector('.mm-marker-layer');if(!layer)return;layer.innerHTML='';
-  if(mmShowLocations)(mmData?.locations||[]).forEach(p=>layer.appendChild(markerButton(p,'location')));
-  if(mmShowDistricts)(mmData?.districts||[]).forEach(p=>layer.appendChild(markerButton(p,'district')));
-}
-function renderDetail(root,name){
-  const detail=root.querySelector('.mm-detail'),empty=root.querySelector('.mm-side-empty');const p=byName(name);if(!p){detail.classList.remove('active');empty.style.display='flex';return}
-  empty.style.display='none';detail.classList.add('active');const state=locState(p.name);const isLoc=!!mmData?.locations?.find(x=>x.name===p.name);const res=isLoc?(state.资源指数??'—'):'—',horde=isLoc?(state.尸群指数??'—'):'—',pass=isLoc?(state.通行状态||'未知'):'城区概览';const tags=Array.isArray(state.动态标签)?state.动态标签:[];const img=p.image?asset(p.image):'';
-  const tagHtml=tags.length?tags.map(x=>`<span class="mm-tag hot">${esc(x)}</span>`).join(''):'<span class="mm-tag">无新增标签</span>';
-  const neighbors=(p.neighbors||[]).map(x=>`<button type="button" data-neighbor="${esc(x)}">${esc(x)}</button>`).join('');
-  detail.innerHTML=`<div class="mm-photo" style="background-image:url('${img}')"><span class="mm-photo-tag">${isLoc?'现场影像':'城区档案'}</span></div><div class="mm-info"><div class="mm-info-head"><div><h2>${esc(p.name)}</h2><p>${esc(p.district||'暮迟市城区分区')}</p></div><span class="mm-id">${esc(p.id)}</span></div>${isLoc?`<div class="mm-statgrid"><div class="mm-stat"><span>物资指数</span><b>${esc(res)}</b><div class="mm-bar"><i style="width:${pct(res)}%"></i></div></div><div class="mm-stat"><span>尸群密度</span><b>${esc(horde)}</b><div class="mm-bar danger"><i style="width:${pct(horde)}%"></i></div></div><div class="mm-stat"><span>基础风险</span><b>${esc(p.baseRisk||'未知')}</b></div><div class="mm-stat"><span>通行状态</span><b>${esc(pass)}</b></div></div><div class="mm-section resources"><label>物资倾向</label><p>${esc(p.resources||'未知')}</p></div><div class="mm-section intel"><label>已知情报</label><p>${esc(p.intel||'暂无')}</p></div><div class="mm-section"><label>动态标签</label><div class="mm-tags">${tagHtml}</div></div>${neighbors?`<div class="mm-section neighborsec"><label>相邻路线</label><div class="mm-neighbors">${neighbors}</div></div>`:''}<div class="mm-side-foot">坐标 ${Number(p.x).toFixed(2)} / ${Number(p.y).toFixed(2)} · ${esc(state.最后更新时间||'未记录更新时间')}</div>`:`<div class="mm-section intel"><label>城区说明</label><p>这是暮迟市的区域级坐标点，用于定位与宏观态势展示；具体探索仍以探索地点层为准。</p></div><div class="mm-side-foot">坐标 ${Number(p.x).toFixed(2)} / ${Number(p.y).toFixed(2)}</div>`}</div>`;
-  detail.querySelectorAll('[data-neighbor]').forEach(b=>b.addEventListener('click',()=>selectPlace(b.dataset.neighbor,true)));
-}
-function updateCurrent(root){root.querySelector('.mm-current-name').textContent=currentName()}
-function render(root){populateSearch(root);renderMarkers(root);renderRoutes(root);updateCurrent(root);renderDetail(root,mmSelected)}
-function stagePoint(name){const p=byName(name);return p?{x:p.x*15.36,y:p.y*10.24}:null}
-function applyView(root){const s=root.querySelector('.mm-stage');if(s)s.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`}
-function fitView(root){const vp=root.querySelector('.mm-viewport');if(!vp)return;const r=vp.getBoundingClientRect();const w=mmData?.map?.width||1536,h=mmData?.map?.height||1024;view.scale=Math.min(r.width/w,r.height/h);view.minScale=Math.max(.12,view.scale*.62);view.maxScale=Math.max(2.8,view.scale*5);view.x=(r.width-w*view.scale)/2;view.y=(r.height-h*view.scale)/2;view.touched=false;applyView(root)}
-function centerOn(root,name,desired){const p=stagePoint(name);const vp=root.querySelector('.mm-viewport');if(!p||!vp)return;const r=vp.getBoundingClientRect();const s=clamp(desired||Math.max(view.scale,Math.min(1.05,view.scale*1.8)),view.minScale,view.maxScale);view.scale=s;view.x=r.width/2-p.x*s;view.y=r.height/2-p.y*s;view.touched=true;applyView(root)}
-function zoomAt(root,factor,cx,cy){const vp=root.querySelector('.mm-viewport');if(!vp)return;const r=vp.getBoundingClientRect();const x=(cx??r.width/2),y=(cy??r.height/2);const old=view.scale,neu=clamp(old*factor,view.minScale,view.maxScale);const wx=(x-view.x)/old,wy=(y-view.y)/old;view.scale=neu;view.x=x-wx*neu;view.y=y-wy*neu;view.touched=true;applyView(root)}
-function selectPlace(name,center=false){const root=mount();mmSelected=name;renderMarkers(root);renderRoutes(root);renderDetail(root,name);const sel=root.querySelector('.mm-search select');if(sel&&[...sel.options].some(o=>o.value===name))sel.value=name;if(center)centerOn(root,name)}
-
-function bind(root){
-  root.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a)return;const act=a.dataset.act;if(act==='close')closeMap();if(act==='refresh')refreshResources();if(act==='zoom-in')zoomAt(root,1.22);if(act==='zoom-out')zoomAt(root,.82);if(act==='reset')fitView(root);if(act==='home'){const n=currentName();if(byName(n))selectPlace(n,true)}if(act==='search'){const n=root.querySelector('.mm-search select')?.value;if(n)selectPlace(n,true)}});
-  root.querySelector('.mm-layers').addEventListener('click',e=>{const b=e.target.closest('[data-layer]');if(!b)return;const k=b.dataset.layer;if(k==='locations')mmShowLocations=!mmShowLocations;if(k==='districts')mmShowDistricts=!mmShowDistricts;if(k==='routes')mmShowRoutes=!mmShowRoutes;b.classList.toggle('active',k==='locations'?mmShowLocations:k==='districts'?mmShowDistricts:mmShowRoutes);renderMarkers(root);renderRoutes(root)});
-  const vp=root.querySelector('.mm-viewport');
-  vp.addEventListener('wheel',e=>{e.preventDefault();const r=vp.getBoundingClientRect();zoomAt(root,e.deltaY<0?1.12:.89,e.clientX-r.left,e.clientY-r.top)},{passive:false});
-  vp.addEventListener('pointerdown',e=>{if(e.target.closest('.mm-marker'))return;vp.setPointerCapture?.(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1)dragStart={px:e.clientX,py:e.clientY,x:view.x,y:view.y};if(pointers.size===2){const ps=[...pointers.values()];pinchStart={d:Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y),scale:view.scale,x:view.x,y:view.y,cx:(ps[0].x+ps[1].x)/2,cy:(ps[0].y+ps[1].y)/2}}});
-  vp.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1&&dragStart){view.x=dragStart.x+(e.clientX-dragStart.px);view.y=dragStart.y+(e.clientY-dragStart.py);view.touched=true;applyView(root)}else if(pointers.size===2&&pinchStart){const ps=[...pointers.values()];const d=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);const newScale=clamp(pinchStart.scale*(d/(pinchStart.d||1)),view.minScale,view.maxScale);const r=vp.getBoundingClientRect();const cx=pinchStart.cx-r.left,cy=pinchStart.cy-r.top;const wx=(cx-pinchStart.x)/pinchStart.scale,wy=(cy-pinchStart.y)/pinchStart.scale;view.scale=newScale;view.x=cx-wx*newScale;view.y=cy-wy*newScale;view.touched=true;applyView(root)}});
-  const end=e=>{pointers.delete(e.pointerId);if(pointers.size<2)pinchStart=null;if(!pointers.size)dragStart=null};vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);
-  MM_DOC.addEventListener('keydown',e=>{if(e.key==='Escape'&&root.classList.contains('mm-open'))closeMap()});
-  MM_HOST.addEventListener?.('resize',()=>{if(root.classList.contains('mm-open')&&!view.touched)fitView(root)});
-}
-
-function setHostOpen(open){const host=ensureHost();host.style.setProperty('pointer-events',open?'auto':'none','important');host.style.setProperty('visibility','visible','important');host.style.setProperty('opacity','1','important');host.style.setProperty('display','block','important')}
-function ensureVisible(root){
-  setHostOpen(true);root.classList.add('mm-open');root.setAttribute('aria-hidden','false');
-  const r=root.getBoundingClientRect();
-  if(r.width<100||r.height<100){root.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;background:rgba(5,8,10,.94)!important;z-index:1!important'}
-}
-function showLoadError(root,e){
-  try{
-    ensureVisible(root);
-    const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML=`<div><b>地图资源加载失败</b><br><span>${esc(e?.message||e||'未知错误')}</span><br><small>请确认 GitHub 仓库已上传 Maps/index.js、Maps/style.css、Maps/map-data.json 与 Assets/暮迟市地图.png。</small></div>`}
-  }catch(_){}
-}
-async function refreshResources(){const root=mount();root.classList.add('mm-refreshing');try{await Promise.all([loadStyle(true),loadData()]);mmStat=await getStat();const img=root.querySelector('.mm-map-image');img.src=asset(mmData.map.image);render(root);if(!view.touched)setTimeout(()=>fitView(root),30)}catch(e){console.error('[暮迟地图] 刷新失败',e)}finally{root.classList.remove('mm-refreshing')}}
-async function openMap(){
-  const root=mount();ensureVisible(root);root.classList.add('mm-refreshing');
-  try{
-    await loadStyle();await loadData();mmStat=await getStat();
-    const img=root.querySelector('.mm-map-image');
-    img.onerror=()=>{if(!img.dataset.fallback){img.dataset.fallback='1';img.src=asset(mmData.map.image,1)}else{const empty=root.querySelector('.mm-side-empty');if(empty){empty.style.display='flex';empty.innerHTML='<div><b>地图底图加载失败</b><br><span>界面已打开，但底图资源无法读取。</span></div>'}}};
-    img.src=asset(mmData.map.image);render(root);
-    const cur=currentName();if(!mmSelected&&byName(cur))mmSelected=cur;render(root);
-    requestAnimationFrame(()=>{ensureVisible(root);fitView(root);if(mmSelected)centerOn(root,mmSelected,Math.max(view.scale,view.scale*1.28))});
-    setTimeout(()=>ensureVisible(root),80);
-  }catch(e){console.error('[暮迟地图] 打开失败',e);showLoadError(root,e)}finally{root.classList.remove('mm-refreshing')}
+  cleanupStale();
+  if(!cssText)throw Error('地图样式尚未准备完成');
+  const frame=MM_DOC.createElement('iframe');
+  frame.id=FRAME_ID;
+  frame.setAttribute('frameborder','0');
+  frame.setAttribute('title','暮迟市地图');
+  applyFrameLayout(frame);
+  (MM_DOC.body||MM_DOC.documentElement).appendChild(frame);
+  const doc=frame.contentDocument;
+  if(!doc)throw Error('地图 iframe 无法访问');
+  doc.open();
+  const mobileDoc=hostViewport().w<=900;
+  doc.write(`<!doctype html><html class="${mobileDoc?'mm-mobile-doc':''}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0!important;width:100%!important;height:100%!important;overflow:hidden!important;background:transparent!important}body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}</style><style>${cssText}</style></head><body class="${mobileDoc?'mm-mobile-doc':''}">${shellHtml()}</body></html>`);
+  doc.close();
+  const root=doc.getElementById(ROOT_ID);
+  if(!root)throw Error('地图界面创建失败');
+  syncDisplayMode(root);
+  bindRoot(root);
+  doc.addEventListener('keydown',e=>{if(e.key==='Escape')closeMap()});
+  hostResizeHandler=()=>{
+    const live=getFrame();if(live!==frame)return;
+    applyFrameLayout(frame);
+    setTimeout(()=>{const r=getRoot();if(r){syncDisplayMode(r);layoutDesktop(r);fit(r)}},30);
+  };
+  try{MM_HOST.addEventListener?.('resize',hostResizeHandler,{passive:true})}catch{}
   return root;
 }
-function closeMap(){const root=getMapRoot();if(root){root.classList.remove('mm-open');root.setAttribute('aria-hidden','true');root.removeAttribute('style')}setHostOpen(false)}
-let mmBound=false;
-function accessibleWindows(){const out=[],seen=new Set();let w=window;for(let i=0;i<8;i++){try{if(!seen.has(w)){out.push(w);seen.add(w)}if(!w.parent||w.parent===w)break;void w.parent.document;w=w.parent}catch(_){break}}return out}
-function accessibleDocs(){return accessibleWindows().map(w=>{try{return w.document}catch{return null}}).filter(Boolean)}
-function publishApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshResources,version:'1.0.4'};
-  for(const w of accessibleWindows())try{w.MuchiMap=api}catch{}
-  try{MM_HOST.MuchiMap=api}catch{};try{window.MuchiMap=api}catch{};
+
+function regionById(id){return mapData?.regions?.find(r=>r.id===String(id))||null}
+function currentLocation(){return String(statData?.世界?.当前地点||'未知')}
+function currentRegion(){
+  const loc=currentLocation();
+  return mapData?.regions?.find(r=>r.name===loc||(r.aliases||[]).includes(loc))||null;
+}
+function intelFor(region){const k=region?.intelKey||region?.name;return statData?.地图?.区域情报?.[k]||null}
+function currentDay(){return Number(statData?.世界?.灾变日||0)}
+function intelStatus(region){
+  const x=intelFor(region)||{},raw=String(x.情报状态||'未知'),last=Number(x.最后更新日||0),day=currentDay();
+  if(raw!=='未知'&&last>0&&day-last>=3)return'过期';
+  return['未知','传闻','已确认','过期'].includes(raw)?raw:'未知';
+}
+function intelView(region){
+  const x=intelFor(region)||{},status=intelStatus(region);
+  return{status,resource:x.资源已知?clamp(Number(x.资源指数||0),0,100):null,horde:x.尸群已知?clamp(Number(x.尸群指数||0),0,100):null,passage:String(x.通行状态||'未知'),tags:Array.isArray(x.动态标签)?x.动态标签.slice(0,8):[],summary:String(x.情报摘要||''),source:String(x.情报来源||''),confidence:Number(x.置信度||0),firstDay:Number(x.首次发现日||0),lastDay:Number(x.最后更新日||0),updated:String(x.最后更新时间||''),resourceTrend:String(x.资源趋势||'未知'),hordeTrend:String(x.尸群趋势||'未知')};
+}
+function riskClass(risk){return /极高|高/.test(risk)?'danger':/中/.test(risk)?'warn':'safe'}
+function statusClass(s){return s==='已确认'?'confirmed':s==='传闻'?'rumor':s==='过期'?'stale':'unknown'}
+function trendHtml(trend){if(trend==='上升')return'<small class="mm-trend up">↑ 较上次情报上升</small>';if(trend==='下降')return'<small class="mm-trend down">↓ 较上次情报下降</small>';if(trend==='稳定')return'<small class="mm-trend flat">≈ 与上次接近</small>';return''}
+function metricHtml(label,value,cls='',trend='未知'){
+  if(value==null)return `<div class="mm-metric is-unknown"><span>${esc(label)}</span><b>未知</b><small>尚未获得可靠情报</small></div>`;
+  return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b>${trendHtml(trend)}</div>`;
+}
+function exploreSummary(name){try{return MM_HOST.MuchiExplore?.summary?.(name,statData)||null}catch{return null}}
+function exploreActionHtml(name){
+  const s=exploreSummary(name),isCurrent=currentLocation()===name;
+  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}`:'可探索';
+  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">现场探索</button>`:''}</span>`;
+}
+function renderDetail(root,region){
+  const box=root.querySelector('[data-ui="detail"]');if(!box)return;
+  if(!region){box.classList.remove('is-open');box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';return}
+  box.classList.add('is-open');
+  const intel=intelView(region),cur=currentRegion()?.id===region.id,members=[...(region.members||[])];
+  const memberRows=members.length?members.map(name=>`<div class="mm-subrow"><span><strong>${esc(name)}</strong><small>${esc(region.memberNotes?.[name]||'可直接进入的具体探索节点')}</small></span>${exploreActionHtml(name)}</div>`).join(''):`<div class="mm-none"><b>当前仅开放区域情报</b><span>${esc(region.explorationStatus||'暂无可直接搜刮的具体节点')}</span></div>`;
+  const tags=intel.tags.length?`<div class="mm-tags">${intel.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
+  const intelMeta=intel.status==='未知'?'<div class="mm-intel-empty">实时资源、尸群与道路情况尚未获得。等待 MR-87 暮迟市频道或后续可靠情报。</div>':`<div class="mm-intel-summary"><p>${esc(intel.summary||'已收到区域情报，但摘要不完整。')}</p><div><span>来源</span><b>${esc(intel.source||'暮迟市公共广播')}</b></div><div><span>置信度</span><b>${clamp(intel.confidence,0,100)}%</b></div></div>`;
+  box.innerHTML=`<article class="mm-card">
+    <button class="mm-detail-close" type="button" data-act="detail-close" aria-label="收起区域详情">×</button>
+    <div class="mm-photo"><img src="${esc(asset(region.image))}" alt="${esc(region.name)}"><div class="mm-photo-fade"></div><em>${esc(region.id)}</em></div>
+    <div class="mm-card-body">
+      <div class="mm-card-top"><div><small>${esc(region.type||'区域')}</small><h2>${esc(region.name)}</h2></div><div class="mm-card-badges">${cur?'<span class="mm-current-badge">当前区域</span>':''}<span class="mm-intel-badge ${statusClass(intel.status)}">${esc(intel.status)}</span></div></div>
+      <p class="mm-desc">${esc(region.description||'')}</p>
+      <div class="mm-supply-profile"><span>物资倾向</span><b>${esc(region.supplyProfile||'未整理')}</b></div>
+      <div class="mm-facts"><div><span>基础风险</span><b class="${riskClass(region.risk)}">${esc(region.risk||'未知')}</b></div><div><span>通行情报</span><b>${esc(intel.passage||'未知')}</b></div></div>
+      ${metricHtml('资源指数',intel.resource,'',intel.resourceTrend)}
+      ${metricHtml('尸群指数',intel.horde,'horde',intel.hordeTrend)}
+      ${tags}
+      ${intelMeta}
+      <section class="mm-sub"><header><b>区域内已知地点</b><span>${members.length}</span></header>${memberRows}</section>
+      <div class="mm-update">${intel.status==='未知'?'最后情报：暂无':`最后情报：第${intel.lastDay||'?'}日 · ${esc(intel.updated||'时间未知')}`}</div>
+    </div>
+  </article>`;
+  const photo=box.querySelector('.mm-photo img');photo?.addEventListener('error',()=>{const wrap=photo.closest('.mm-photo');wrap?.classList.add('no-image');photo.remove()},{once:true});
+}
+function renderHotspots(root){
+  const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;const cur=currentRegion()?.id||'';
+  layer.innerHTML=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
+}
+function render(root){
+  const name=root.querySelector('[data-ui="current-name"]');if(name)name.textContent=currentLocation();
+  renderHotspots(root);
+  renderDetail(root,selectedId?regionById(selectedId):null);
+  updateZoomLabel(root);
+}
+
+function stage(root){return root.querySelector('[data-ui="stage"]')}
+function viewport(root){return root.querySelector('[data-ui="viewport"]')}
+function baseW(){return Number(mapData?.map?.width)||1536}
+function baseH(){return Number(mapData?.map?.height)||1024}
+function isDesktop(){return hostViewport().w>900}
+function layoutDesktop(root){
+  const {w:vw,h:vh}=hostViewport();
+  if(vw<=900){root.style.removeProperty('--head-h');return;}
+  root.style.setProperty('--head-h',`${vh<700?50:54}px`);
+}
+function applyZoom(root){
+  const s=stage(root);if(!s)return;
+  s.style.width=`${Math.round(baseW()*zoom)}px`;
+  s.style.height=`${Math.round(baseH()*zoom)}px`;
+  updateZoomLabel(root);
+}
+function updateZoomLabel(root){const e=root.querySelector('[data-ui="zoom"]');if(e)e.textContent=`${Math.round(zoom*100)}%`}
+function computeFit(root){
+  const vp=viewport(root);if(!vp)return .5;
+  const w=Math.max(200,vp.clientWidth-2),h=Math.max(160,vp.clientHeight-2);
+  return clamp(Math.min(w/baseW(),h/baseH()),.18,1.3);
+}
+function fit(root){
+  const vp=viewport(root);if(!vp)return;
+  zoom=computeFit(root);
+  /* PC 不允许缩到“适应窗口”以下，否则会露出大片黑色空区；手机维持原来的缩放余量。 */
+  minZoom=isDesktop(root)?zoom:Math.max(.12,Math.min(zoom*.65,.28));
+  maxZoom=Math.max(2.6,zoom*5);
+  applyZoom(root);
+  requestAnimationFrame(()=>{vp.scrollLeft=Math.max(0,(vp.scrollWidth-vp.clientWidth)/2);vp.scrollTop=Math.max(0,(vp.scrollHeight-vp.clientHeight)/2)});
+}
+function zoomAt(root,next,clientX=null,clientY=null){
+  const vp=viewport(root);if(!vp)return;
+  const old=zoom,newZoom=clamp(next,minZoom,maxZoom);if(Math.abs(newZoom-old)<.0001)return;
+  const rect=vp.getBoundingClientRect();
+  const px=clientX==null?vp.clientWidth/2:clientX-rect.left;
+  const py=clientY==null?vp.clientHeight/2:clientY-rect.top;
+  const wx=(vp.scrollLeft+px)/old,wy=(vp.scrollTop+py)/old;
+  zoom=newZoom;applyZoom(root);
+  vp.scrollLeft=wx*zoom-px;vp.scrollTop=wy*zoom-py;
+}
+function centerRegion(root,region,ensureReadable=false){
+  if(!region)return;const vp=viewport(root);if(!vp)return;
+  if(ensureReadable&&zoom<.72)zoomAt(root,.72);
+  requestAnimationFrame(()=>{
+    vp.scrollLeft=clamp((region.x/100)*baseW()*zoom-vp.clientWidth/2,0,Math.max(0,vp.scrollWidth-vp.clientWidth));
+    vp.scrollTop=clamp((region.y/100)*baseH()*zoom-vp.clientHeight/2,0,Math.max(0,vp.scrollHeight-vp.clientHeight));
+  });
+}
+function selectRegion(root,id,center=false){
+  const r=regionById(id);if(!r)return;selectedId=r.id;render(root);if(center)centerRegion(root,r,false);
+  root.classList.add('mm-has-detail');
+}
+
+
+function bindFrameDrag(root){
+  const frame=getFrame();
+  const head=root?.querySelector?.('.mm-head');
+  if(!frame||!head||head.dataset.dragBound==='1')return;
+  head.dataset.dragBound='1';
+  const stop=e=>{
+    if(!frameDrag)return;
+    try{if(e?.pointerId!=null&&head.hasPointerCapture?.(e.pointerId))head.releasePointerCapture(e.pointerId)}catch{}
+    frameDrag=null;
+    root.classList.remove('mm-window-dragging');
+  };
+  head.addEventListener('pointerdown',e=>{
+    if(hostViewport().w<=900)return;
+    if(e.button!==0)return;
+    if(e.target?.closest?.('.mm-controls,button,a,input,select,textarea,[data-no-window-drag]'))return;
+    const rect=frame.getBoundingClientRect();
+    frame.style.setProperty('left',`${Math.round(rect.left)}px`,'important');
+    frame.style.setProperty('top',`${Math.round(rect.top)}px`,'important');
+    frame.style.setProperty('right','auto','important');
+    frame.style.setProperty('bottom','auto','important');
+    frame.style.setProperty('transform','none','important');
+    frameDrag={
+      id:e.pointerId,
+      startX:Number(e.screenX)||0,
+      startY:Number(e.screenY)||0,
+      left:rect.left,
+      top:rect.top,
+      width:rect.width,
+      height:rect.height
+    };
+    try{head.setPointerCapture?.(e.pointerId)}catch{}
+    root.classList.add('mm-window-dragging');
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove',e=>{
+    if(!frameDrag||e.pointerId!==frameDrag.id)return;
+    const {w,h}=hostViewport();
+    const pad=8;
+    const maxLeft=Math.max(pad,w-frameDrag.width-pad);
+    const maxTop=Math.max(pad,h-frameDrag.height-pad);
+    const dx=(Number(e.screenX)||0)-frameDrag.startX;
+    const dy=(Number(e.screenY)||0)-frameDrag.startY;
+    frame.style.setProperty('left',`${Math.round(clamp(frameDrag.left+dx,pad,maxLeft))}px`,'important');
+    frame.style.setProperty('top',`${Math.round(clamp(frameDrag.top+dy,pad,maxTop))}px`,'important');
+  });
+  head.addEventListener('pointerup',stop);
+  head.addEventListener('pointercancel',stop);
+  head.addEventListener('lostpointercapture',()=>{
+    frameDrag=null;
+    root.classList.remove('mm-window-dragging');
+  });
+}
+
+function bindRoot(root){
+  bindFrameDrag(root);
+  root.addEventListener('click',e=>{
+    if(e.target===root){closeMap();return}
+    const spot=e.target.closest?.('[data-region]');if(spot){e.preventDefault();e.stopPropagation();selectRegion(root,spot.dataset.region,false);return}
+    const b=e.target.closest?.('[data-act]');if(!b)return;const a=b.dataset.act;
+    if(a==='close')return closeMap();
+    if(a==='detail-close'){selectedId='';root.classList.remove('mm-has-detail');render(root);return}
+    if(a==='zoom-in')return zoomAt(root,zoom*1.2);
+    if(a==='zoom-out')return zoomAt(root,zoom/1.2);
+    if(a==='fit')return fit(root);
+    if(a==='locate'){const r=currentRegion();if(r){selectRegion(root,r.id,false);centerRegion(root,r,true)}return}
+    if(a==='explore'){const loc=b.dataset.location;if(loc!==currentLocation()){try{MM_HOST.toastr?.warning?.('只能探索角色当前所在地点')}catch{}return}const api=MM_HOST.MuchiExplore;if(!api?.open){try{MM_HOST.toastr?.warning?.('现场探索引擎尚未加载')}catch{}return}closeMap();setTimeout(()=>api.open({location:loc}),40);return}
+  });
+  const vp=viewport(root);
+  if(!vp)throw Error('地图视口创建失败');
+  vp.addEventListener('wheel',e=>{
+    if(!(e.ctrlKey||e.metaKey))return;
+    e.preventDefault();zoomAt(root,zoom*(e.deltaY<0?1.12:.89),e.clientX,e.clientY);
+  },{passive:false});
+  vp.addEventListener('pointerdown',e=>{
+    if(e.pointerType!=='mouse'||e.button!==0||e.target.closest?.('[data-region]'))return;
+    drag={x:e.clientX,y:e.clientY,left:vp.scrollLeft,top:vp.scrollTop,id:e.pointerId};
+    vp.setPointerCapture?.(e.pointerId);vp.classList.add('dragging');e.preventDefault();
+  });
+  vp.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;vp.scrollLeft=drag.left-(e.clientX-drag.x);vp.scrollTop=drag.top-(e.clientY-drag.y)});
+  const end=e=>{if(!drag||e.pointerId!==drag.id)return;drag=null;vp.classList.remove('dragging')};
+  vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);vp.addEventListener('lostpointercapture',()=>{drag=null;vp.classList.remove('dragging')});
+  const win=root.ownerDocument?.defaultView;
+  if(win){
+    let resizeTimer=0;
+    win.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(getRoot()!==root)return;layoutDesktop(root);fit(root)},80)},{passive:true});
+  }
+}
+
+export async function openMap(){
+  if(opening)return opening;
+  opening=(async()=>{
+    cleanupStale();
+    try{
+      /* 先准备所有会导致失败的远程资源，再创建任何全屏 DOM。 */
+      await prepareResources();
+      statData=await readStat();
+      const root=mount();
+      layoutDesktop(root);
+      const img=root.querySelector('[data-ui="map"]');
+      if(!img)throw Error('地图图片容器创建失败');
+      img.src=asset(mapData.map.image);
+      img.onerror=()=>{
+        if(img.dataset.fallback)return;
+        img.dataset.fallback='1';
+        img.src=asset(mapData.map.image,1);
+      };
+      const cur=currentRegion();
+      selectedId=(!isDesktop(root)&&cur)?cur.id:'';
+      render(root);
+      if(selectedId)root.classList.add('mm-has-detail');else root.classList.remove('mm-has-detail');
+      requestAnimationFrame(()=>{
+        const live=getRoot();if(live!==root)return;
+        fit(root);if(cur)setTimeout(()=>{if(getRoot()===root)centerRegion(root,cur,false)},30);
+      });
+      return root;
+    }catch(e){
+      cleanupStale();
+      notifyError(e?.message||String(e));
+      return null;
+    }finally{opening=null}
+  })();
+  return opening;
+}
+export function closeMap(){cleanupStale()}
+export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
+
+function installApi(){
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.5'};
+  try{MM_HOST.MuchiMap=api}catch{}
+  try{window.MuchiMap=api}catch{}
   return api;
 }
-function bindClickBridge(doc){
-  try{if(doc.__muchiMapBridgeV104)return;doc.__muchiMapBridgeV104=true;doc.addEventListener('click',e=>{const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;e.preventDefault();e.stopImmediatePropagation?.();e.stopPropagation();openMap()},true)}catch(e){console.warn('[暮迟地图] 文档入口绑定失败',e)}
+function bindDocument(){
+  try{
+    const key='__muchiMapBridgeV242';
+    if(MM_DOC[key])return;MM_DOC[key]=true;
+    MM_DOC.addEventListener('click',e=>{
+      const b=e.target?.closest?.('[data-muchi-map-open="1"]');if(!b)return;
+      e.preventDefault();e.stopPropagation();openMap();
+    },true);
+  }catch(_){}
 }
-function installTriggers(){
-  publishApi();accessibleDocs().forEach(bindClickBridge);
-  if(mmBound)return;mmBound=true;
-  try{if(typeof eventOn==='function'&&typeof getButtonEvent==='function')eventOn(getButtonEvent('暮迟地图'),openMap)}catch(e){console.error('[暮迟地图] 按钮绑定失败',e)}
-  try{if(typeof eventOn==='function')eventOn('muchi:open-map',openMap)}catch(e){console.warn('[暮迟地图] 自定义事件绑定失败',e)}
+function install(){
+  installApi();bindDocument();
+  try{MM_HOST.__muchiMapExploreSyncStop?.stop?.()}catch{}
+  try{MM_HOST.__muchiMapExploreSyncStop=globalThis.eventOn?.('muchi:explore-updated',async()=>{statData=await readStat();const root=getRoot();if(root)render(root)})}catch{}
+  if(bound)return;bound=true;
+  /* 脚本库按钮不在远程模块里注册：getButtonEvent 是脚本专属 API，
+   * v25.8 角色卡脚本本体会按官方文档完成按钮绑定。 */
+  try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
-publishApi();
-try{if(typeof $==='function')$(()=>installTriggers());else setTimeout(installTriggers,0)}catch{setTimeout(installTriggers,0)}
-setTimeout(()=>{publishApi();accessibleDocs().forEach(bindClickBridge)},700);
-export const VERSION='1.0.4';
-export {openMap,closeMap,refreshResources};
+install();
+export const VERSION='2.5.5';
