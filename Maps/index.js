@@ -1,6 +1,7 @@
-/* 暮迟市地图 v2.5.2
+/* 暮迟市地图 v2.5.4
  * 01-11 是唯一交互对象。
- * v2.5.2: 基于 v2.5.0，仅替换 PC 标题栏拖动实现；地图结构、iframe、初始位置、尺寸、数据与其它交互均保持不变。
+ * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
+ * 医疗区前端名称修正为“河西南部医疗区”，通过 intelKey 继续读取 MR-87 旧键“河东医疗区”。
  * 标题栏改用 pointer capture，手机端不启用窗口拖动。
  * 任一步骤失败都会完整回滚。
  */
@@ -51,7 +52,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.5.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.5.4`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -76,7 +77,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.5.0]',text);
+  console.error('[暮迟地图 v2.5.4]',text);
 }
 
 function cleanupStale(){
@@ -205,7 +206,7 @@ function currentRegion(){
   const loc=currentLocation();
   return mapData?.regions?.find(r=>r.name===loc||(r.aliases||[]).includes(loc))||null;
 }
-function intelFor(region){return statData?.地图?.区域情报?.[region?.name]||null}
+function intelFor(region){const k=region?.intelKey||region?.name;return statData?.地图?.区域情报?.[k]||null}
 function currentDay(){return Number(statData?.世界?.灾变日||0)}
 function intelStatus(region){
   const x=intelFor(region)||{},raw=String(x.情报状态||'未知'),last=Number(x.最后更新日||0),day=currentDay();
@@ -223,12 +224,18 @@ function metricHtml(label,value,cls='',trend='未知'){
   if(value==null)return `<div class="mm-metric is-unknown"><span>${esc(label)}</span><b>未知</b><small>尚未获得可靠情报</small></div>`;
   return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b>${trendHtml(trend)}</div>`;
 }
+function exploreSummary(name){try{return MM_HOST.MuchiExplore?.summary?.(name,statData)||null}catch{return null}}
+function exploreActionHtml(name){
+  const s=exploreSummary(name),isCurrent=currentLocation()===name;
+  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}`:'可探索';
+  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">现场探索</button>`:''}</span>`;
+}
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
   if(!region){box.classList.remove('is-open');box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';return}
   box.classList.add('is-open');
   const intel=intelView(region),cur=currentRegion()?.id===region.id,members=[...(region.members||[])];
-  const memberRows=members.length?members.map(name=>`<div class="mm-subrow"><span>${esc(name)}</span><b>静态地点</b></div>`).join(''):'<div class="mm-none">暂无已登记的附属地点</div>';
+  const memberRows=members.length?members.map(name=>`<div class="mm-subrow"><span><strong>${esc(name)}</strong><small>${esc(region.memberNotes?.[name]||'可直接进入的具体探索节点')}</small></span>${exploreActionHtml(name)}</div>`).join(''):`<div class="mm-none"><b>当前仅开放区域情报</b><span>${esc(region.explorationStatus||'暂无可直接搜刮的具体节点')}</span></div>`;
   const tags=intel.tags.length?`<div class="mm-tags">${intel.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
   const intelMeta=intel.status==='未知'?'<div class="mm-intel-empty">实时资源、尸群与道路情况尚未获得。等待 MR-87 暮迟市频道或后续可靠情报。</div>':`<div class="mm-intel-summary"><p>${esc(intel.summary||'已收到区域情报，但摘要不完整。')}</p><div><span>来源</span><b>${esc(intel.source||'暮迟市公共广播')}</b></div><div><span>置信度</span><b>${clamp(intel.confidence,0,100)}%</b></div></div>`;
   box.innerHTML=`<article class="mm-card">
@@ -237,6 +244,7 @@ function renderDetail(root,region){
     <div class="mm-card-body">
       <div class="mm-card-top"><div><small>${esc(region.type||'区域')}</small><h2>${esc(region.name)}</h2></div><div class="mm-card-badges">${cur?'<span class="mm-current-badge">当前区域</span>':''}<span class="mm-intel-badge ${statusClass(intel.status)}">${esc(intel.status)}</span></div></div>
       <p class="mm-desc">${esc(region.description||'')}</p>
+      <div class="mm-supply-profile"><span>物资倾向</span><b>${esc(region.supplyProfile||'未整理')}</b></div>
       <div class="mm-facts"><div><span>基础风险</span><b class="${riskClass(region.risk)}">${esc(region.risk||'未知')}</b></div><div><span>通行情报</span><b>${esc(intel.passage||'未知')}</b></div></div>
       ${metricHtml('资源指数',intel.resource,'',intel.resourceTrend)}
       ${metricHtml('尸群指数',intel.horde,'horde',intel.hordeTrend)}
@@ -379,6 +387,7 @@ function bindRoot(root){
     if(a==='zoom-out')return zoomAt(root,zoom/1.2);
     if(a==='fit')return fit(root);
     if(a==='locate'){const r=currentRegion();if(r){selectRegion(root,r.id,false);centerRegion(root,r,true)}return}
+    if(a==='explore'){const loc=b.dataset.location;if(loc!==currentLocation()){try{MM_HOST.toastr?.warning?.('只能探索角色当前所在地点')}catch{}return}const api=MM_HOST.MuchiExplore;if(!api?.open){try{MM_HOST.toastr?.warning?.('现场探索引擎尚未加载')}catch{}return}closeMap();setTimeout(()=>api.open({location:loc}),40);return}
   });
   const vp=viewport(root);
   if(!vp)throw Error('地图视口创建失败');
@@ -440,7 +449,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.2'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.4'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -457,10 +466,12 @@ function bindDocument(){
 }
 function install(){
   installApi();bindDocument();
+  try{MM_HOST.__muchiMapExploreSyncStop?.stop?.()}catch{}
+  try{MM_HOST.__muchiMapExploreSyncStop=globalThis.eventOn?.('muchi:explore-updated',async()=>{statData=await readStat();const root=getRoot();if(root)render(root)})}catch{}
   if(bound)return;bound=true;
   /* 脚本库按钮不在远程模块里注册：getButtonEvent 是脚本专属 API，
    * v25.8 角色卡脚本本体会按官方文档完成按钮绑定。 */
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.5.2';
+export const VERSION='2.5.4';
