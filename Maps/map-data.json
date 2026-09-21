@@ -1,5 +1,5 @@
 {
-  "version": "2.5.7",
+  "version": "2.6.0",
   "map": {
     "title": "暮迟市",
     "subtitle": "MU CHI CITY",
@@ -115,7 +115,7 @@
       "x": 56.07,
       "y": 51.71,
       "image": "Locations/南桥检查点.png",
-      "description": "连接两岸的唯一通道，也是最危险的地方。",
+      "description": "城内旧检查点已经废弃；桥南更远处是否仍有组织化幸存者设施，只能依据玩家实际获得的最新情报确认。",
       "type": "交通节点",
       "risk": "极高",
       "members": [
@@ -129,7 +129,20 @@
       "memberNotes": {
         "南桥检查点": "交通军警专精｜少量但独特，枪弹极稀有"
       },
-      "explorationStatus": "已开放具体探索节点"
+      "explorationStatus": "已开放具体探索节点",
+      "specialMembers": [
+        {
+          "name": "南桥南岸临时转运营",
+          "kind": "幸存者营地 · 临时转运设施",
+          "note": "由军警/地方撤离力量维持的组织化幸存者营地，入口承担临时转运与硬隔离；设有红外体温、生命体征、创口与感染筛查闸口。它不等于城内已废弃的南桥检查点，也不是绝对安全区。",
+          "visibility": "survivor_transit_known",
+          "displayName": "南桥南岸幸存者营地",
+          "image": "Locations/survivor_camp.png",
+          "mapX": 59.2,
+          "mapY": 56.6,
+          "marker": "✚"
+        }
+      ]
     },
     {
       "id": "06",

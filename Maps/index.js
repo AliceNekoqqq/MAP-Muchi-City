@@ -1,5 +1,6 @@
-/* 暮迟市地图 v2.5.7
- * 01-11 是唯一交互对象。
+/* 暮迟市地图 v2.7.0
+ * 01-11 仍是区域交互对象；v2.6增加“已知幸存者设施”信息层，不新增任务点。
+ * v2.6.0: 南桥区域可按玩家实际获知情报显示幸存者转运营；该信息不是任务箭头，也不是结构化搜刮节点。
  * v2.5.7: 共生联动：地点条目显示抑制窗口是否足以覆盖“前往 + 一轮探索 + 返回安全屋”；保持 v2.5.6 手机版缩窗。
  * v2.5.6: 手机端进一步缩为约92vw×80vh的明显留边窗口；探索入口按钮同步强化，并显示行动轮待推进状态；
  * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
@@ -54,7 +55,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.5.5`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.7.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -79,7 +80,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.5.5]',text);
+  console.error('[暮迟地图 v2.7.0]',text);
 }
 
 function cleanupStale(){
@@ -243,12 +244,28 @@ function exploreActionHtml(name){
   const cover=plan?`<small class="mm-window-plan ${plan.status==='不足'?'bad':plan.status==='吃紧'?'warn':'ok'}">抑制${esc(plan.status)} · 预计${esc(plan.min)}–${esc(plan.max)}min</small>`:'';
   return `<span class="mm-sub-actions"><b>${esc(label)}</b>${cover}${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">进入现场探索</button>`:''}</span>`;
 }
+function survivorTransitKnown(){
+  const p=statData?.暗线?.父母||{},clues=Array.isArray(p.已知线索)?p.已知线索:[];
+  if(clues.some(x=>String(x).includes('南桥南岸临时转运营')))return true;
+  if(['前往安置点','隔离线分别','已安置'].includes(String(p.阶段||'')))return true;
+  if(String(p.安置地点||'').includes('南桥南岸'))return true;
+  const x=statData?.地图?.区域情报?.['南桥']||{};
+  const text=[x.情报摘要,x.情报来源,...(Array.isArray(x.动态标签)?x.动态标签:[])].join(' ');
+  return /南桥南岸临时转运营|临时转运营|转运点|隔离点|撤离点|安置点|幸存者营地|幸存者聚落|撤离车队|接收幸存者/.test(text);
+}
+function specialMemberVisible(m){if(!m)return false;if(m.visibility==='survivor_transit_known')return survivorTransitKnown();return true}
+function specialMemberHtml(m){
+  const p=statData?.暗线?.父母||{},settled=String(p.状态||'')==='已安置'&&String(p.安置地点||'').includes(String(m.name||''));
+  const title=m.displayName||m.name||'已知幸存者设施';
+  const photo=m.image?`<div class="mm-special-photo"><img src="${esc(asset(m.image))}" alt="${esc(title)}"><div class="mm-special-photo-fade"></div><em>已知幸存者设施</em></div>`:'';
+  return `<div class="mm-special-site">${photo}<div class="mm-special-body"><span><strong>${esc(title)}</strong><small>${esc(m.note||'来自玩家已获得情报的幸存者设施。')}</small></span><span class="mm-sub-actions"><b>${settled?'父母已安置':'已知幸存者设施'}</b><small>${esc(m.kind||'非探索节点')} · 非任务目标</small></span></div></div>`;
+}
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
   if(!region){box.classList.remove('is-open');box.innerHTML='<div class="mm-detail-empty"><i>01—11</i><b>选择区域</b><span>点击地图上的编号圆点查看详情。</span></div>';return}
   box.classList.add('is-open');
-  const intel=intelView(region),cur=currentRegion()?.id===region.id,members=[...(region.members||[])];
-  const memberRows=members.length?members.map(name=>`<div class="mm-subrow"><span><strong>${esc(name)}</strong><small>${esc(region.memberNotes?.[name]||'可直接进入的具体探索节点')}</small></span>${exploreActionHtml(name)}</div>`).join(''):`<div class="mm-none"><b>当前仅开放区域情报</b><span>${esc(region.explorationStatus||'暂无可直接搜刮的具体节点')}</span></div>`;
+  const intel=intelView(region),cur=currentRegion()?.id===region.id,members=[...(region.members||[])],specials=[...(region.specialMembers||[])].filter(specialMemberVisible);
+  const normalRows=members.map(name=>`<div class="mm-subrow"><span><strong>${esc(name)}</strong><small>${esc(region.memberNotes?.[name]||'可直接进入的具体探索节点')}</small></span>${exploreActionHtml(name)}</div>`).join(''),specialRows=specials.map(specialMemberHtml).join(''),memberRows=(normalRows+specialRows)||`<div class="mm-none"><b>当前仅开放区域情报</b><span>${esc(region.explorationStatus||'暂无可直接搜刮的具体节点')}</span></div>`;
   const tags=intel.tags.length?`<div class="mm-tags">${intel.tags.map(t=>`<i>${esc(t)}</i>`).join('')}</div>`:'';
   const intelMeta=intel.status==='未知'?'<div class="mm-intel-empty">实时资源、尸群与道路情况尚未获得。等待 MR-87 暮迟市频道或后续可靠情报。</div>':`<div class="mm-intel-summary"><p>${esc(intel.summary||'已收到区域情报，但摘要不完整。')}</p><div><span>来源</span><b>${esc(intel.source||'暮迟市公共广播')}</b></div><div><span>置信度</span><b>${clamp(intel.confidence,0,100)}%</b></div></div>`;
   box.innerHTML=`<article class="mm-card">
@@ -263,15 +280,18 @@ function renderDetail(root,region){
       ${metricHtml('尸群指数',intel.horde,'horde',intel.hordeTrend)}
       ${tags}
       ${intelMeta}
-      <section class="mm-sub"><header><b>区域内已知地点</b><span>${members.length}</span></header>${memberRows}</section>
+      <section class="mm-sub"><header><b>区域内已知地点</b><span>${members.length+specials.length}</span></header>${memberRows}</section>
       <div class="mm-update">${intel.status==='未知'?'最后情报：暂无':`最后情报：第${intel.lastDay||'?'}日 · ${esc(intel.updated||'时间未知')}`}</div>
     </div>
   </article>`;
   const photo=box.querySelector('.mm-photo img');photo?.addEventListener('error',()=>{const wrap=photo.closest('.mm-photo');wrap?.classList.add('no-image');photo.remove()},{once:true});
+  box.querySelectorAll('.mm-special-photo img').forEach(img=>img.addEventListener('error',()=>{img.closest('.mm-special-photo')?.classList.add('no-image');img.remove()},{once:true}));
 }
 function renderHotspots(root){
   const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;const cur=currentRegion()?.id||'';
-  layer.innerHTML=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
+  const normal=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
+  const special=(mapData?.regions||[]).flatMap(r=>(r.specialMembers||[]).filter(m=>specialMemberVisible(m)&&Number.isFinite(Number(m.mapX))&&Number.isFinite(Number(m.mapY))).map(m=>`<button type="button" class="mm-hotspot mm-special-hotspot${selectedId===r.id?' selected':''}" data-region="${esc(r.id)}" data-special-site="${esc(m.name||'')}" style="left:${Number(m.mapX)}%;top:${Number(m.mapY)}%" aria-label="${esc((m.displayName||m.name||'幸存者设施')+' 已知幸存者设施')}"><span>${esc(m.marker||'◆')}</span></button>`)).join('');
+  layer.innerHTML=normal+special;
 }
 function render(root){
   const name=root.querySelector('[data-ui="current-name"]');if(name)name.textContent=currentLocation();
@@ -487,4 +507,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.5.5';
+export const VERSION='2.7.0';
