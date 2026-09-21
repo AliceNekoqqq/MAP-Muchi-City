@@ -1,5 +1,7 @@
-/* 暮迟市地图 v2.5.4
+/* 暮迟市地图 v2.5.7
  * 01-11 是唯一交互对象。
+ * v2.5.7: 共生联动：地点条目显示抑制窗口是否足以覆盖“前往 + 一轮探索 + 返回安全屋”；保持 v2.5.6 手机版缩窗。
+ * v2.5.6: 手机端进一步缩为约92vw×80vh的明显留边窗口；探索入口按钮同步强化，并显示行动轮待推进状态；
  * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
  * 医疗区前端名称修正为“河西南部医疗区”，通过 intelKey 继续读取 MR-87 旧键“河东医疗区”。
  * 标题栏改用 pointer capture，手机端不启用窗口拖动。
@@ -52,7 +54,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.5.4`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.5.5`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -77,7 +79,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.5.4]',text);
+  console.error('[暮迟地图 v2.5.5]',text);
 }
 
 function cleanupStale(){
@@ -142,9 +144,10 @@ function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${R
 </section>`}
 
 function hostViewport(){
-  const de=MM_DOC.documentElement,body=MM_DOC.body;
-  const w=Math.max(320,Number(MM_HOST?.innerWidth)||de?.clientWidth||body?.clientWidth||1280);
-  const h=Math.max(480,Number(MM_HOST?.innerHeight)||de?.clientHeight||body?.clientHeight||800);
+  const de=MM_DOC.documentElement,body=MM_DOC.body,vv=MM_HOST?.visualViewport;
+  const visualW=Number(vv?.width)||0,visualH=Number(vv?.height)||0;
+  const w=Math.max(320,visualW||Number(MM_HOST?.innerWidth)||de?.clientWidth||body?.clientWidth||1280);
+  const h=Math.max(480,visualH||Number(MM_HOST?.innerHeight)||de?.clientHeight||body?.clientHeight||800);
   return {w,h};
 }
 function desktopFrameSize(){
@@ -163,9 +166,16 @@ function desktopFrameSize(){
 }
 function applyFrameLayout(frame){
   if(!frame)return;
-  const {w}=hostViewport();
+  const {w,h}=hostViewport();
   if(w<=900){
-    frame.style.cssText='position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;border:0!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;';
+    /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
+     * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
+     * 详情区继续在 iframe 内部滚动，避免浏览器地址栏/底栏遮住尾部。 */
+    const width=Math.max(300,Math.min(Math.round(w-28),Math.round(w*.92)));
+    const ratio=h<700?.84:.80;
+    const height=Math.max(470,Math.min(Math.round(h-44),Math.round(h*ratio)));
+    const radius=w<=430?16:18;
+    frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 70px rgba(0,0,0,.58),0 0 0 1px rgba(174,202,204,.12)!important;`;
     return;
   }
   const size=desktopFrameSize();
@@ -225,10 +235,13 @@ function metricHtml(label,value,cls='',trend='未知'){
   return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b>${trendHtml(trend)}</div>`;
 }
 function exploreSummary(name){try{return MM_HOST.MuchiExplore?.summary?.(name,statData)||null}catch{return null}}
+function suppressionPlan(name){try{return MM_HOST.MuchiSymbiosis?.assessPlan?.({from:currentLocation(),to:name,exploreMin:18,exploreMax:36,returnTo:'地下安全屋'})||null}catch{return null}}
 function exploreActionHtml(name){
-  const s=exploreSummary(name),isCurrent=currentLocation()===name;
-  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}`:'可探索';
-  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">现场探索</button>`:''}</span>`;
+  const s=exploreSummary(name),isCurrent=currentLocation()===name,plan=suppressionPlan(name);
+  const round=s?.roundState==='待剧情推进'?' · 待剧情推进':s?.roundState==='进行中'?` · 本轮余${s.roundRemaining}`:'';
+  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}${round}`:'可探索';
+  const cover=plan?`<small class="mm-window-plan ${plan.status==='不足'?'bad':plan.status==='吃紧'?'warn':'ok'}">抑制${esc(plan.status)} · 预计${esc(plan.min)}–${esc(plan.max)}min</small>`:'';
+  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${cover}${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">进入现场探索</button>`:''}</span>`;
 }
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
@@ -449,7 +462,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.4'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.5'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -474,4 +487,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.5.4';
+export const VERSION='2.5.5';
