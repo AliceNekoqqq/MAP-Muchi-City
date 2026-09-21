@@ -1,6 +1,6 @@
-/* 暮迟市地图 v2.5.5
+/* 暮迟市地图 v2.5.6
  * 01-11 是唯一交互对象。
- * v2.5.5: 手机端改为留边小窗，使用 visualViewport 计算实际可视高度，并补足底部安全区，避免详情尾部被浏览器工具栏遮挡；
+ * v2.5.6: 手机端进一步缩为约92vw×80vh的明显留边窗口；探索入口按钮同步强化，并显示行动轮待推进状态；
  * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
  * 医疗区前端名称修正为“河西南部医疗区”，通过 intelKey 继续读取 MR-87 旧键“河东医疗区”。
  * 标题栏改用 pointer capture，手机端不启用窗口拖动。
@@ -167,15 +167,14 @@ function applyFrameLayout(frame){
   if(!frame)return;
   const {w,h}=hostViewport();
   if(w<=900){
-    /* 手机不再使用 100vh 全屏：以 visualViewport 的真实可见区域计算，
-     * 上下主动留出约 5% 空隙，并让 iframe 自身裁切圆角。
-     * 这样 Safari/Chrome 底栏出现时，详情尾部仍可滚到可见区。 */
-    const side=Math.max(7,Math.min(12,Math.round(w*.025)));
-    const width=Math.max(304,Math.round(w-side*2));
-    const targetH=Math.round(h*.90);
-    const height=Math.max(430,Math.min(Math.round(h-18),targetH));
-    const radius=w<=430?14:16;
-    frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 18px 58px rgba(0,0,0,.48),0 0 0 1px rgba(174,202,204,.08)!important;`;
+    /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
+     * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
+     * 详情区继续在 iframe 内部滚动，避免浏览器地址栏/底栏遮住尾部。 */
+    const width=Math.max(300,Math.min(Math.round(w-28),Math.round(w*.92)));
+    const ratio=h<700?.84:.80;
+    const height=Math.max(470,Math.min(Math.round(h-44),Math.round(h*ratio)));
+    const radius=w<=430?16:18;
+    frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 70px rgba(0,0,0,.58),0 0 0 1px rgba(174,202,204,.12)!important;`;
     return;
   }
   const size=desktopFrameSize();
@@ -237,8 +236,9 @@ function metricHtml(label,value,cls='',trend='未知'){
 function exploreSummary(name){try{return MM_HOST.MuchiExplore?.summary?.(name,statData)||null}catch{return null}}
 function exploreActionHtml(name){
   const s=exploreSummary(name),isCurrent=currentLocation()===name;
-  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}`:'可探索';
-  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">现场探索</button>`:''}</span>`;
+  const round=s?.roundState==='待剧情推进'?' · 待剧情推进':s?.roundState==='进行中'?` · 本轮余${s.roundRemaining}`:'';
+  const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}${round}`:'可探索';
+  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">进入现场探索</button>`:''}</span>`;
 }
 function renderDetail(root,region){
   const box=root.querySelector('[data-ui="detail"]');if(!box)return;
