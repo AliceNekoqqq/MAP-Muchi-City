@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.7.0
+/* 暮迟市地图 v2.7.1
  * 01-11 仍是区域交互对象；v2.6增加“已知幸存者设施”信息层，不新增任务点。
  * v2.6.0: 南桥区域可按玩家实际获知情报显示幸存者转运营；该信息不是任务箭头，也不是结构化搜刮节点。
  * v2.5.7: 共生联动：地点条目显示抑制窗口是否足以覆盖“前往 + 一轮探索 + 返回安全屋”；保持 v2.5.6 手机版缩窗。
@@ -55,7 +55,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.7.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.7.1`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -86,7 +86,7 @@ function notifyError(message){
 function cleanupStale(){
   drag=null;
   frameDrag=null;
-  if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{} hostResizeHandler=null;}
+  if(hostResizeHandler){try{MM_HOST.removeEventListener?.('resize',hostResizeHandler)}catch{}try{MM_HOST.visualViewport?.removeEventListener?.('resize',hostResizeHandler);MM_HOST.visualViewport?.removeEventListener?.('scroll',hostResizeHandler)}catch{} hostResizeHandler=null;}
   try{MM_DOC.getElementById(DRAG_LAYER_ID)?.remove()}catch{}
   try{MM_DOC.getElementById(FRAME_ID)?.remove()}catch{}
   for(const id of OLD_IDS)try{MM_DOC.getElementById(id)?.remove()}catch{}
@@ -149,7 +149,8 @@ function hostViewport(){
   const visualW=Number(vv?.width)||0,visualH=Number(vv?.height)||0;
   const w=Math.max(320,visualW||Number(MM_HOST?.innerWidth)||de?.clientWidth||body?.clientWidth||1280);
   const h=Math.max(480,visualH||Number(MM_HOST?.innerHeight)||de?.clientHeight||body?.clientHeight||800);
-  return {w,h};
+  const x=Math.max(0,Number(vv?.offsetLeft)||0),y=Math.max(0,Number(vv?.offsetTop)||0);
+  return {w,h,x,y};
 }
 function desktopFrameSize(){
   const {w:vw,h:vh}=hostViewport();
@@ -167,7 +168,8 @@ function desktopFrameSize(){
 }
 function applyFrameLayout(frame){
   if(!frame)return;
-  const {w,h}=hostViewport();
+  const {w,h,x,y}=hostViewport();
+  const centerX=x+w/2,centerY=y+h/2;
   if(w<=900){
     /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
      * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
@@ -176,11 +178,11 @@ function applyFrameLayout(frame){
     const ratio=h<700?.84:.80;
     const height=Math.max(470,Math.min(Math.round(h-44),Math.round(h*ratio)));
     const radius=w<=430?16:18;
-    frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 70px rgba(0,0,0,.58),0 0 0 1px rgba(174,202,204,.12)!important;`;
+    frame.style.cssText=`position:fixed!important;left:${centerX}px!important;top:${centerY}px!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 70px rgba(0,0,0,.58),0 0 0 1px rgba(174,202,204,.12)!important;`;
     return;
   }
   const size=desktopFrameSize();
-  frame.style.cssText=`position:fixed!important;left:50%!important;top:50%!important;width:${size.width}px!important;height:${size.height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:18px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 72px rgba(0,0,0,.34),0 0 0 1px rgba(174,202,204,.05)!important;`;
+  frame.style.cssText=`position:fixed!important;left:${centerX}px!important;top:${centerY}px!important;width:${size.width}px!important;height:${size.height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:18px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 72px rgba(0,0,0,.34),0 0 0 1px rgba(174,202,204,.05)!important;`;
 }
 function mount(){
   cleanupStale();
@@ -208,6 +210,7 @@ function mount(){
     setTimeout(()=>{const r=getRoot();if(r){syncDisplayMode(r);layoutDesktop(r);fit(r)}},30);
   };
   try{MM_HOST.addEventListener?.('resize',hostResizeHandler,{passive:true})}catch{}
+  try{MM_HOST.visualViewport?.addEventListener?.('resize',hostResizeHandler,{passive:true});MM_HOST.visualViewport?.addEventListener?.('scroll',hostResizeHandler,{passive:true})}catch{}
   return root;
 }
 
@@ -482,7 +485,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.5.5'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.7.1'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -507,4 +510,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.7.0';
+export const VERSION='2.7.1';
