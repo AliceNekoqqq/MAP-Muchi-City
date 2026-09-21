@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.7.1
+/* 暮迟市地图 v2.8.0
  * 01-11 仍是区域交互对象；v2.6增加“已知幸存者设施”信息层，不新增任务点。
  * v2.6.0: 南桥区域可按玩家实际获知情报显示幸存者转运营；该信息不是任务箭头，也不是结构化搜刮节点。
  * v2.5.7: 共生联动：地点条目显示抑制窗口是否足以覆盖“前往 + 一轮探索 + 返回安全屋”；保持 v2.5.6 手机版缩窗。
@@ -44,6 +44,9 @@ let zoom=1;
 let minZoom=.18;
 let maxZoom=2.6;
 let drag=null;
+const touchPoints=new Map();
+let touchPan=null;
+let touchPinch=null;
 let frameDrag=null;
 let bound=false;
 let opening=null;
@@ -55,7 +58,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.7.1`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.8.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -80,7 +83,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.7.0]',text);
+  console.error('[暮迟地图 v2.8.0]',text);
 }
 
 function cleanupStale(){
@@ -129,7 +132,7 @@ function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${R
     </header>
     <div class="mm-content">
       <main class="mm-map-area">
-        <div class="mm-hint">拖动 · 点击 01–11 查看区域</div>
+        <div class="mm-hint">单指拖动 · 双指缩放 · 点击区域</div>
         <div class="mm-viewport" data-ui="viewport">
           <div class="mm-stage" data-ui="stage">
             <img class="mm-map" data-ui="map" alt="暮迟市城市地图" draggable="false">
@@ -174,9 +177,10 @@ function applyFrameLayout(frame){
     /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
      * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
      * 详情区继续在 iframe 内部滚动，避免浏览器地址栏/底栏遮住尾部。 */
-    const width=Math.max(300,Math.min(Math.round(w-28),Math.round(w*.92)));
-    const ratio=h<700?.84:.80;
-    const height=Math.max(470,Math.min(Math.round(h-44),Math.round(h*ratio)));
+    /* v2.8.0 mobile: near-full visible viewport, while keeping a small safe margin. */
+    const width=Math.min(Math.max(300,Math.round(w*.97)),Math.max(300,Math.round(w-8)));
+    const ratio=h<700?.96:.94;
+    const height=Math.min(Math.max(420,Math.round(h*ratio)),Math.max(400,Math.round(h-10)));
     const radius=w<=430?16:18;
     frame.style.cssText=`position:fixed!important;left:${centerX}px!important;top:${centerY}px!important;width:${width}px!important;height:${height}px!important;transform:translate(-50%,-50%)!important;border:0!important;border-radius:${radius}px!important;margin:0!important;padding:0!important;z-index:2147483647!important;background:transparent!important;display:block!important;overflow:hidden!important;box-shadow:0 22px 70px rgba(0,0,0,.58),0 0 0 1px rgba(174,202,204,.12)!important;`;
     return;
@@ -207,7 +211,7 @@ function mount(){
   hostResizeHandler=()=>{
     const live=getFrame();if(live!==frame)return;
     applyFrameLayout(frame);
-    setTimeout(()=>{const r=getRoot();if(r){syncDisplayMode(r);layoutDesktop(r);fit(r)}},30);
+    setTimeout(()=>{const r=getRoot();if(r){syncDisplayMode(r);layoutDesktop(r);fit(r,!isDesktop(r))}},30);
   };
   try{MM_HOST.addEventListener?.('resize',hostResizeHandler,{passive:true})}catch{}
   try{MM_HOST.visualViewport?.addEventListener?.('resize',hostResizeHandler,{passive:true});MM_HOST.visualViewport?.addEventListener?.('scroll',hostResizeHandler,{passive:true})}catch{}
@@ -325,12 +329,17 @@ function computeFit(root){
   const w=Math.max(200,vp.clientWidth-2),h=Math.max(160,vp.clientHeight-2);
   return clamp(Math.min(w/baseW(),h/baseH()),.18,1.3);
 }
-function fit(root){
+function fit(root,readableMobile=false){
   const vp=viewport(root);if(!vp)return;
-  zoom=computeFit(root);
-  /* PC 不允许缩到“适应窗口”以下，否则会露出大片黑色空区；手机维持原来的缩放余量。 */
-  minZoom=isDesktop(root)?zoom:Math.max(.12,Math.min(zoom*.65,.28));
-  maxZoom=Math.max(2.6,zoom*5);
+  const overview=computeFit(root);
+  zoom=overview;
+  /* 手机默认使用可读视图：不强行一次塞下整张城市地图，而是让地图接近填满画布高度；“适应”按钮仍可回到全城总览。 */
+  if(readableMobile&&!isDesktop(root)){
+    const heightFill=(Math.max(160,vp.clientHeight-2)/baseH())*.96;
+    zoom=clamp(Math.max(overview*1.42,Math.min(heightFill,overview*1.9)),overview,1.35);
+  }
+  minZoom=isDesktop(root)?overview:Math.max(.12,Math.min(overview*.65,.28));
+  maxZoom=Math.max(2.6,overview*5,zoom*3.2);
   applyZoom(root);
   requestAnimationFrame(()=>{vp.scrollLeft=Math.max(0,(vp.scrollWidth-vp.clientWidth)/2);vp.scrollTop=Math.max(0,(vp.scrollHeight-vp.clientHeight)/2)});
 }
@@ -439,10 +448,58 @@ function bindRoot(root){
   vp.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;vp.scrollLeft=drag.left-(e.clientX-drag.x);vp.scrollTop=drag.top-(e.clientY-drag.y)});
   const end=e=>{if(!drag||e.pointerId!==drag.id)return;drag=null;vp.classList.remove('dragging')};
   vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);vp.addEventListener('lostpointercapture',()=>{drag=null;vp.classList.remove('dragging')});
+  /* v2.8.0: mobile one-finger pan + two-finger pinch zoom. */
+  const touchStart=e=>{
+    if(e.pointerType!=='touch')return;
+    const onHotspot=!!e.target.closest?.('[data-region]');
+    touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{vp.setPointerCapture?.(e.pointerId)}catch{}
+    if(touchPoints.size===1 && !onHotspot){
+      touchPan={id:e.pointerId,x:e.clientX,y:e.clientY,left:vp.scrollLeft,top:vp.scrollTop,moved:false};
+    }else if(touchPoints.size>=2){
+      const pts=[...touchPoints.values()].slice(0,2),a=pts[0],b=pts[1];
+      touchPan=null;
+      touchPinch={dist:Math.max(1,Math.hypot(b.x-a.x,b.y-a.y)),midX:(a.x+b.x)/2,midY:(a.y+b.y)/2};
+    }
+    if(!onHotspot||touchPoints.size>=2)e.preventDefault();
+  };
+  const touchMove=e=>{
+    if(e.pointerType!=='touch'||!touchPoints.has(e.pointerId))return;
+    touchPoints.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchPoints.size>=2){
+      const pts=[...touchPoints.values()].slice(0,2),a=pts[0],b=pts[1];
+      const dist=Math.max(1,Math.hypot(b.x-a.x,b.y-a.y)),midX=(a.x+b.x)/2,midY=(a.y+b.y)/2;
+      if(!touchPinch)touchPinch={dist,midX,midY};
+      vp.scrollLeft-=midX-touchPinch.midX;vp.scrollTop-=midY-touchPinch.midY;
+      const ratio=dist/Math.max(1,touchPinch.dist);
+      if(Number.isFinite(ratio)&&Math.abs(ratio-1)>.008)zoomAt(root,zoom*ratio,midX,midY);
+      touchPinch={dist,midX,midY};
+      e.preventDefault();return;
+    }
+    if(touchPan&&touchPan.id===e.pointerId){
+      const dx=e.clientX-touchPan.x,dy=e.clientY-touchPan.y;
+      if(Math.abs(dx)+Math.abs(dy)>4)touchPan.moved=true;
+      vp.scrollLeft=touchPan.left-dx;vp.scrollTop=touchPan.top-dy;
+      e.preventDefault();
+    }
+  };
+  const touchEnd=e=>{
+    if(e.pointerType!=='touch')return;
+    touchPoints.delete(e.pointerId);
+    if(touchPoints.size<2)touchPinch=null;
+    if(touchPoints.size===1){
+      const [id,p]=[...touchPoints.entries()][0];
+      touchPan={id,x:p.x,y:p.y,left:vp.scrollLeft,top:vp.scrollTop,moved:false};
+    }else if(touchPoints.size===0)touchPan=null;
+  };
+  vp.addEventListener('pointerdown',touchStart,{passive:false});
+  vp.addEventListener('pointermove',touchMove,{passive:false});
+  vp.addEventListener('pointerup',touchEnd,{passive:false});
+  vp.addEventListener('pointercancel',touchEnd,{passive:false});
   const win=root.ownerDocument?.defaultView;
   if(win){
     let resizeTimer=0;
-    win.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(getRoot()!==root)return;layoutDesktop(root);fit(root)},80)},{passive:true});
+    win.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(getRoot()!==root)return;layoutDesktop(root);fit(root,!isDesktop(root))},80)},{passive:true});
   }
 }
 
@@ -470,7 +527,7 @@ export async function openMap(){
       if(selectedId)root.classList.add('mm-has-detail');else root.classList.remove('mm-has-detail');
       requestAnimationFrame(()=>{
         const live=getRoot();if(live!==root)return;
-        fit(root);if(cur)setTimeout(()=>{if(getRoot()===root)centerRegion(root,cur,false)},30);
+        fit(root,!isDesktop(root));if(cur)setTimeout(()=>{if(getRoot()===root)centerRegion(root,cur,false)},30);
       });
       return root;
     }catch(e){
@@ -485,7 +542,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.7.1'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.8.0'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -510,4 +567,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.7.1';
+export const VERSION='2.8.0';

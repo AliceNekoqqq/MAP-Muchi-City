@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.5.6 · compact map terminal + stronger mobile window + exploration round status */
+/* 暮迟市地图 v2.8.0 · compact map terminal + stronger mobile window + exploration round status */
 :root{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
 body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
@@ -51,14 +51,14 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 .mm-root.mm-mobile .mm-title b{font-size:16px;letter-spacing:.10em}.mm-root.mm-mobile .mm-title span{display:none}.mm-root.mm-mobile .mm-location{display:none}
 .mm-root.mm-mobile .mm-controls{gap:4px}.mm-root.mm-mobile .mm-controls button{height:34px;min-width:34px;padding:0 8px;border-radius:10px}.mm-root.mm-mobile .mm-controls .mm-zoom-label{min-width:52px;padding:0 6px}.mm-root.mm-mobile .mm-controls .mm-text-btn{min-width:34px;padding:0;justify-content:center}.mm-root.mm-mobile .mm-controls .mm-text-btn span{display:none}.mm-root.mm-mobile .mm-controls .mm-text-btn i{font-size:15px}.mm-root.mm-mobile .mm-controls .mm-close{margin-left:1px}
 .mm-root.mm-mobile .mm-content{display:block;height:auto;min-height:0;overflow:visible;flex:none;background:#050809}
-.mm-root.mm-mobile .mm-map-area{position:relative;width:100%;height:auto;aspect-ratio:1.78/1;min-height:0;border-bottom:1px solid rgba(196,211,212,.10)}
+.mm-root.mm-mobile .mm-map-area{position:relative;width:100%;height:clamp(390px,64dvh,560px);min-height:390px;aspect-ratio:auto;border-bottom:1px solid rgba(196,211,212,.10)}
 .mm-root.mm-mobile .mm-hint{left:8px;top:8px;max-width:calc(100% - 16px);padding:5px 8px;font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mm-root.mm-mobile .mm-detail{position:relative;left:auto;right:auto;top:auto;bottom:auto;opacity:1;pointer-events:auto;width:100%;height:auto;max-height:none;overflow:visible;padding-bottom:max(14px,env(safe-area-inset-bottom));border:0;border-left:0;border-top:1px solid rgba(196,211,212,.08);border-radius:0 0 14px 14px;background:linear-gradient(180deg,#0d1315,#090d0f);box-shadow:none;transform:none!important;transition:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 .mm-root.mm-mobile .mm-detail-close{display:none}.mm-root.mm-mobile .mm-detail-empty{min-height:160px;padding:24px 20px calc(28px + env(safe-area-inset-bottom))}.mm-root.mm-mobile .mm-card{min-height:0;display:grid;grid-template-columns:minmax(190px,.86fr) 1.3fr}.mm-root.mm-mobile .mm-photo{height:auto;min-height:230px}.mm-root.mm-mobile .mm-card-body{padding:14px 16px calc(24px + env(safe-area-inset-bottom))}.mm-root.mm-mobile .mm-card-top h2{font-size:20px}.mm-root.mm-mobile .mm-desc{margin-top:9px;font-size:10px}.mm-root.mm-mobile .mm-sub{margin-top:13px}.mm-root.mm-mobile .mm-update{margin-top:10px}
 .mm-root.mm-mobile .mm-hotspot{width:36px;height:36px}
 @media(max-width:620px){
   .mm-root.mm-mobile .mm-head{height:56px;flex-basis:56px;padding:7px 8px 7px 11px}.mm-root.mm-mobile .mm-title b{font-size:15px}.mm-root.mm-mobile .mm-controls{gap:3px}.mm-root.mm-mobile .mm-controls button{height:32px;min-width:32px;padding:0 7px}.mm-root.mm-mobile .mm-controls .mm-zoom-label{min-width:47px;font-size:8px}.mm-root.mm-mobile .mm-controls .mm-text-btn{display:none}.mm-root.mm-mobile .mm-controls .mm-close{font-size:18px}
-  .mm-root.mm-mobile .mm-map-area{aspect-ratio:1.78/1}
+  .mm-root.mm-mobile .mm-map-area{height:clamp(380px,64dvh,540px);min-height:380px;aspect-ratio:auto}
   .mm-root.mm-mobile .mm-card{display:block}.mm-root.mm-mobile .mm-photo{height:132px;min-height:132px}.mm-root.mm-mobile .mm-photo em{left:12px;bottom:9px;font-size:27px}.mm-root.mm-mobile .mm-card-body{padding:13px 14px calc(26px + env(safe-area-inset-bottom))}.mm-root.mm-mobile .mm-card-top h2{font-size:19px}.mm-root.mm-mobile .mm-current-badge{font-size:7px}.mm-root.mm-mobile .mm-desc{font-size:10px;line-height:1.75}.mm-root.mm-mobile .mm-facts{margin-top:12px}.mm-root.mm-mobile .mm-metric{grid-template-columns:54px 1fr 38px;margin-top:9px}.mm-root.mm-mobile .mm-tags{margin-top:10px}.mm-root.mm-mobile .mm-sub{display:block;margin-top:14px}.mm-root.mm-mobile .mm-subrow{padding:7px 0}.mm-root.mm-mobile .mm-update{padding-top:2px}
   .mm-root.mm-mobile .mm-hotspot{width:34px;height:34px}.mm-root.mm-mobile .mm-hotspot::before{inset:5px}.mm-root.mm-mobile .mm-hotspot::after{inset:2px}
 }
@@ -95,3 +95,7 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 .mm-special-photo{position:relative;height:116px;overflow:hidden;background:#0a1215}.mm-special-photo img{width:100%;height:100%;display:block;object-fit:cover;object-position:center}.mm-special-photo-fade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 44%,rgba(5,10,12,.76))}.mm-special-photo em{position:absolute;left:9px;bottom:7px;color:#c9dcdb;font-size:6px;font-style:normal;letter-spacing:.12em}.mm-special-photo.no-image{display:none}
 .mm-hotspot.mm-special-hotspot{width:28px;height:28px;border-color:rgba(142,211,202,.68);background:rgba(19,59,59,.91);box-shadow:0 0 0 3px rgba(119,197,188,.10),0 5px 18px rgba(0,0,0,.34)}.mm-hotspot.mm-special-hotspot span{font-size:12px;color:#c5ebe4}.mm-hotspot.mm-special-hotspot:after{content:'营地';position:absolute;left:50%;top:31px;transform:translateX(-50%);padding:2px 5px;border-radius:5px;background:rgba(4,11,13,.82);color:#a7c8c4;font-size:6px;white-space:nowrap;border:1px solid rgba(139,188,185,.16)}
 .mm-root.mm-mobile .mm-special-photo{height:145px}.mm-root.mm-mobile .mm-special-body{display:block}.mm-root.mm-mobile .mm-special-body .mm-sub-actions{margin-top:7px}
+
+/* v2.8.0 mobile touch + larger canvas */
+.mm-root.mm-mobile .mm-viewport{touch-action:none;-webkit-user-select:none;user-select:none}
+@media(max-width:430px){.mm-root.mm-mobile .mm-map-area{height:clamp(370px,62dvh,500px);min-height:370px}.mm-root.mm-mobile .mm-hint{font-size:8px;background:rgba(5,9,11,.84)}}
