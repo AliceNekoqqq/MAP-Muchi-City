@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.8.0 · compact map terminal + stronger mobile window + exploration round status */
+/* 暮迟市地图 v2.8.1 · compact map terminal + stronger mobile window + exploration round status */
 :root{color-scheme:dark}
 html,body{margin:0;width:100%;height:100%;background:transparent!important;overflow:hidden}
 body{font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
@@ -85,7 +85,6 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 /* v2.5.4 exploration linkage */
 .mm-sub-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}.mm-sub-actions>b{color:#8ba1a4!important;font-size:7px!important;font-weight:500!important}.mm-sub-actions button{appearance:none;min-height:28px;border:1px solid rgba(132,198,202,.48);border-radius:8px;background:linear-gradient(180deg,#183238,#102126);color:#d4e5e5;padding:6px 9px;font-size:8px;font-weight:650;letter-spacing:.03em;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}.mm-sub-actions button:hover{border-color:rgba(150,220,223,.72);background:linear-gradient(180deg,#1d3b43,#142b30)}.mm-root.mm-mobile .mm-sub-actions{align-items:flex-end}.mm-root.mm-mobile .mm-sub-actions button{min-height:32px;padding:7px 10px;font-size:9px}
 
-.mm-window-plan{display:block!important;width:100%;text-align:right;font-size:6px!important;line-height:1.2;color:#71878a!important}.mm-window-plan.ok{color:#8fb8ae!important}.mm-window-plan.warn{color:#c1aa84!important}.mm-window-plan.bad{color:#cf93a3!important}.mm-root.mm-mobile .mm-window-plan{font-size:7px!important}
 
 /* v2.7.0 survivor camp knowledge marker + photo */
 .mm-special-site{margin-top:7px;border:1px solid rgba(155,196,198,.13);border-radius:10px;overflow:hidden;background:rgba(100,145,148,.035)}
@@ -96,6 +95,6 @@ html.mm-mobile-doc,body.mm-mobile-doc{height:100%;overflow:hidden!important;back
 .mm-hotspot.mm-special-hotspot{width:28px;height:28px;border-color:rgba(142,211,202,.68);background:rgba(19,59,59,.91);box-shadow:0 0 0 3px rgba(119,197,188,.10),0 5px 18px rgba(0,0,0,.34)}.mm-hotspot.mm-special-hotspot span{font-size:12px;color:#c5ebe4}.mm-hotspot.mm-special-hotspot:after{content:'营地';position:absolute;left:50%;top:31px;transform:translateX(-50%);padding:2px 5px;border-radius:5px;background:rgba(4,11,13,.82);color:#a7c8c4;font-size:6px;white-space:nowrap;border:1px solid rgba(139,188,185,.16)}
 .mm-root.mm-mobile .mm-special-photo{height:145px}.mm-root.mm-mobile .mm-special-body{display:block}.mm-root.mm-mobile .mm-special-body .mm-sub-actions{margin-top:7px}
 
-/* v2.8.0 mobile touch + larger canvas */
+/* v2.8.1 mobile touch + larger canvas */
 .mm-root.mm-mobile .mm-viewport{touch-action:none;-webkit-user-select:none;user-select:none}
 @media(max-width:430px){.mm-root.mm-mobile .mm-map-area{height:clamp(370px,62dvh,500px);min-height:370px}.mm-root.mm-mobile .mm-hint{font-size:8px;background:rgba(5,9,11,.84)}}

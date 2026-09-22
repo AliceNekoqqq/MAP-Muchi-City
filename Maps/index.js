@@ -1,7 +1,6 @@
-/* 暮迟市地图 v2.8.0
+/* 暮迟市地图 v2.8.1
  * 01-11 仍是区域交互对象；v2.6增加“已知幸存者设施”信息层，不新增任务点。
  * v2.6.0: 南桥区域可按玩家实际获知情报显示幸存者转运营；该信息不是任务箭头，也不是结构化搜刮节点。
- * v2.5.7: 共生联动：地点条目显示抑制窗口是否足以覆盖“前往 + 一轮探索 + 返回安全屋”；保持 v2.5.6 手机版缩窗。
  * v2.5.6: 手机端进一步缩为约92vw×80vh的明显留边窗口；探索入口按钮同步强化，并显示行动轮待推进状态；
  * v2.5.4: 在 v2.5.3 物资信息基础上联动角色卡“暮迟现场探索引擎”，显示探索完成度并允许当前地点直接进入探索；
  * 医疗区前端名称修正为“河西南部医疗区”，通过 intelKey 继续读取 MR-87 旧键“河东医疗区”。
@@ -58,7 +57,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.8.0`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.8.1`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -83,7 +82,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.8.0]',text);
+  console.error('[暮迟地图 v2.8.1]',text);
 }
 
 function cleanupStale(){
@@ -177,7 +176,7 @@ function applyFrameLayout(frame){
     /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
      * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
      * 详情区继续在 iframe 内部滚动，避免浏览器地址栏/底栏遮住尾部。 */
-    /* v2.8.0 mobile: near-full visible viewport, while keeping a small safe margin. */
+    /* v2.8.1 mobile: near-full visible viewport, while keeping a small safe margin. */
     const width=Math.min(Math.max(300,Math.round(w*.97)),Math.max(300,Math.round(w-8)));
     const ratio=h<700?.96:.94;
     const height=Math.min(Math.max(420,Math.round(h*ratio)),Math.max(400,Math.round(h-10)));
@@ -243,13 +242,11 @@ function metricHtml(label,value,cls='',trend='未知'){
   return `<div class="mm-metric"><span>${esc(label)}</span><div class="mm-meter"><i class="${cls}" style="width:${clamp(value,0,100)}%"></i></div><b>${clamp(value,0,100)}%</b>${trendHtml(trend)}</div>`;
 }
 function exploreSummary(name){try{return MM_HOST.MuchiExplore?.summary?.(name,statData)||null}catch{return null}}
-function suppressionPlan(name){try{return MM_HOST.MuchiSymbiosis?.assessPlan?.({from:currentLocation(),to:name,exploreMin:18,exploreMax:36,returnTo:'地下安全屋'})||null}catch{return null}}
 function exploreActionHtml(name){
-  const s=exploreSummary(name),isCurrent=currentLocation()===name,plan=suppressionPlan(name);
+  const s=exploreSummary(name),isCurrent=currentLocation()===name;
   const round=s?.roundState==='待剧情推进'?' · 待剧情推进':s?.roundState==='进行中'?` · 本轮余${s.roundRemaining}`:'';
   const label=s?`探索 ${s.percent}%${s.pending?` · ${s.pending}批待收取`:''}${round}`:'可探索';
-  const cover=plan?`<small class="mm-window-plan ${plan.status==='不足'?'bad':plan.status==='吃紧'?'warn':'ok'}">抑制${esc(plan.status)} · 预计${esc(plan.min)}–${esc(plan.max)}min</small>`:'';
-  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${cover}${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">进入现场探索</button>`:''}</span>`;
+  return `<span class="mm-sub-actions"><b>${esc(label)}</b>${isCurrent?`<button type="button" data-act="explore" data-location="${esc(name)}">进入现场探索</button>`:''}</span>`;
 }
 function survivorTransitKnown(){
   const p=statData?.暗线?.父母||{},clues=Array.isArray(p.已知线索)?p.已知线索:[];
@@ -448,7 +445,7 @@ function bindRoot(root){
   vp.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;vp.scrollLeft=drag.left-(e.clientX-drag.x);vp.scrollTop=drag.top-(e.clientY-drag.y)});
   const end=e=>{if(!drag||e.pointerId!==drag.id)return;drag=null;vp.classList.remove('dragging')};
   vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);vp.addEventListener('lostpointercapture',()=>{drag=null;vp.classList.remove('dragging')});
-  /* v2.8.0: mobile one-finger pan + two-finger pinch zoom. */
+  /* v2.8.1: mobile one-finger pan + two-finger pinch zoom. */
   const touchStart=e=>{
     if(e.pointerType!=='touch')return;
     const onHotspot=!!e.target.closest?.('[data-region]');
@@ -542,7 +539,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.8.0'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.8.1'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -567,4 +564,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.8.0';
+export const VERSION='2.8.1';
