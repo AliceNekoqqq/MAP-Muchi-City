@@ -135,7 +135,6 @@ function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${R
         <div class="mm-viewport" data-ui="viewport">
           <div class="mm-stage" data-ui="stage">
             <img class="mm-map" data-ui="map" alt="暮迟市城市地图" draggable="false">
-            <div class="mm-fog-layer" data-ui="fog" aria-hidden="true"></div>
             <div class="mm-hotspots" data-ui="hotspots"></div>
           </div>
         </div>
@@ -294,8 +293,6 @@ function renderDetail(root,region){
 }
 function renderHotspots(root){
   const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;const cur=currentRegion()?.id||'';
-  const fog=root.querySelector('[data-ui="fog"]');
-  if(fog)fog.innerHTML=(mapData?.regions||[]).filter(r=>intelStatus(r)==='未知'&&cur!==r.id).map(r=>`<span class="mm-fog-patch" style="left:${Number(r.x)}%;top:${Number(r.y)}%"></span>`).join('');
   const normal=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
   const special=(mapData?.regions||[]).flatMap(r=>(r.specialMembers||[]).filter(m=>specialMemberVisible(m)&&Number.isFinite(Number(m.mapX))&&Number.isFinite(Number(m.mapY))).map(m=>`<button type="button" class="mm-hotspot mm-special-hotspot${selectedId===r.id?' selected':''}" data-region="${esc(r.id)}" data-special-site="${esc(m.name||'')}" style="left:${Number(m.mapX)}%;top:${Number(m.mapY)}%" aria-label="${esc((m.displayName||m.name||'幸存者设施')+' 已知幸存者设施')}"><span>${esc(m.marker||'◆')}</span></button>`)).join('');
   layer.innerHTML=normal+special;
