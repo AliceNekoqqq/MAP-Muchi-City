@@ -1,4 +1,4 @@
-/* 暮迟市地图 v2.8.1
+/* 暮迟市地图 v2.9.0
  * 01-11 仍是区域交互对象；v2.6增加“已知幸存者设施”信息层，不新增任务点。
  * v2.6.0: 南桥区域可按玩家实际获知情报显示幸存者转运营；该信息不是任务箭头，也不是结构化搜刮节点。
  * v2.5.6: 手机端进一步缩为约92vw×80vh的明显留边窗口；探索入口按钮同步强化，并显示行动轮待推进状态；
@@ -57,7 +57,7 @@ async function loadText(path){
   let last;
   for(let i=0;i<MM_BASES.length;i++){
     try{
-      const r=await fetch(`${asset(path,i)}?v=2.8.1`,{cache:'no-store'});
+      const r=await fetch(`${asset(path,i)}?v=2.9.0`,{cache:'no-store'});
       if(!r.ok)throw Error(`${path}: HTTP ${r.status}`);
       return await r.text();
     }catch(e){last=e}
@@ -82,7 +82,7 @@ async function readStat(){
 function notifyError(message){
   const text=`暮迟地图打开失败：${message}`;
   try{MM_HOST.toastr?.error?.(text)}catch{}
-  console.error('[暮迟地图 v2.8.1]',text);
+  console.error('[暮迟地图 v2.9.0]',text);
 }
 
 function cleanupStale(){
@@ -135,6 +135,7 @@ function shellHtml(){const mobile=hostViewport().w<=900;return `<section id="${R
         <div class="mm-viewport" data-ui="viewport">
           <div class="mm-stage" data-ui="stage">
             <img class="mm-map" data-ui="map" alt="暮迟市城市地图" draggable="false">
+            <div class="mm-fog-layer" data-ui="fog" aria-hidden="true"></div>
             <div class="mm-hotspots" data-ui="hotspots"></div>
           </div>
         </div>
@@ -176,7 +177,7 @@ function applyFrameLayout(frame){
     /* v2.5.6: 手机端必须肉眼可见地缩小，而不是只留十来像素边缘。
      * 宽度约 92vw，高度通常约 80vh；短屏稍放宽到 84vh，仍保留明显上下空间。
      * 详情区继续在 iframe 内部滚动，避免浏览器地址栏/底栏遮住尾部。 */
-    /* v2.8.1 mobile: near-full visible viewport, while keeping a small safe margin. */
+    /* v2.9.0 mobile: near-full visible viewport, while keeping a small safe margin. */
     const width=Math.min(Math.max(300,Math.round(w*.97)),Math.max(300,Math.round(w-8)));
     const ratio=h<700?.96:.94;
     const height=Math.min(Math.max(420,Math.round(h*ratio)),Math.max(400,Math.round(h-10)));
@@ -293,6 +294,8 @@ function renderDetail(root,region){
 }
 function renderHotspots(root){
   const layer=root.querySelector('[data-ui="hotspots"]');if(!layer)return;const cur=currentRegion()?.id||'';
+  const fog=root.querySelector('[data-ui="fog"]');
+  if(fog)fog.innerHTML=(mapData?.regions||[]).filter(r=>intelStatus(r)==='未知'&&cur!==r.id).map(r=>`<span class="mm-fog-patch" style="left:${Number(r.x)}%;top:${Number(r.y)}%"></span>`).join('');
   const normal=(mapData?.regions||[]).map(r=>{const st=intelStatus(r);return `<button type="button" class="mm-hotspot intel-${st==='已确认'?'confirmed':st==='传闻'?'rumor':st==='过期'?'stale':'unknown'}${selectedId===r.id?' selected':''}${cur===r.id?' current':''}" data-region="${esc(r.id)}" style="left:${r.x}%;top:${r.y}%" aria-label="${esc(r.id+' '+r.name+' '+st)}"><span>${esc(r.id)}</span></button>`}).join('');
   const special=(mapData?.regions||[]).flatMap(r=>(r.specialMembers||[]).filter(m=>specialMemberVisible(m)&&Number.isFinite(Number(m.mapX))&&Number.isFinite(Number(m.mapY))).map(m=>`<button type="button" class="mm-hotspot mm-special-hotspot${selectedId===r.id?' selected':''}" data-region="${esc(r.id)}" data-special-site="${esc(m.name||'')}" style="left:${Number(m.mapX)}%;top:${Number(m.mapY)}%" aria-label="${esc((m.displayName||m.name||'幸存者设施')+' 已知幸存者设施')}"><span>${esc(m.marker||'◆')}</span></button>`)).join('');
   layer.innerHTML=normal+special;
@@ -359,8 +362,13 @@ function centerRegion(root,region,ensureReadable=false){
   });
 }
 function selectRegion(root,id,center=false){
-  const r=regionById(id);if(!r)return;selectedId=r.id;render(root);if(center)centerRegion(root,r,false);
+  const r=regionById(id);if(!r)return;const changed=selectedId!==r.id;selectedId=r.id;render(root);if(center)centerRegion(root,r,false);
   root.classList.add('mm-has-detail');
+  if(changed&&/极高|高/.test(r.risk)){
+    const area=root.querySelector('.mm-map-area');area?.querySelector('.mm-entry-cue')?.remove();
+    const cue=root.ownerDocument.createElement('div');cue.className='mm-entry-cue';cue.textContent=`警戒区域 / ${r.name}`;
+    area?.appendChild(cue);setTimeout(()=>cue.remove(),1500);
+  }
 }
 
 
@@ -445,7 +453,7 @@ function bindRoot(root){
   vp.addEventListener('pointermove',e=>{if(!drag||e.pointerId!==drag.id)return;vp.scrollLeft=drag.left-(e.clientX-drag.x);vp.scrollTop=drag.top-(e.clientY-drag.y)});
   const end=e=>{if(!drag||e.pointerId!==drag.id)return;drag=null;vp.classList.remove('dragging')};
   vp.addEventListener('pointerup',end);vp.addEventListener('pointercancel',end);vp.addEventListener('lostpointercapture',()=>{drag=null;vp.classList.remove('dragging')});
-  /* v2.8.1: mobile one-finger pan + two-finger pinch zoom. */
+  /* v2.9.0: mobile one-finger pan + two-finger pinch zoom. */
   const touchStart=e=>{
     if(e.pointerType!=='touch')return;
     const onHotspot=!!e.target.closest?.('[data-region]');
@@ -539,7 +547,7 @@ export function closeMap(){cleanupStale()}
 export async function refreshMap(){mapData=null;cssText='';statData=await readStat();return openMap()}
 
 function installApi(){
-  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.8.1'};
+  const api={open:openMap,close:closeMap,refresh:refreshMap,version:'2.9.0'};
   try{MM_HOST.MuchiMap=api}catch{}
   try{window.MuchiMap=api}catch{}
   return api;
@@ -564,4 +572,4 @@ function install(){
   try{if(typeof globalThis.eventOn==='function')globalThis.eventOn('muchi:open-map',openMap)}catch(_){}
 }
 install();
-export const VERSION='2.8.1';
+export const VERSION='2.9.0';
